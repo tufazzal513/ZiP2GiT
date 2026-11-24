@@ -3,14 +3,16 @@ name: Build Debug APK
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -28,18 +30,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # The ubuntu runner image already ships the Android command line tools,
+      # platform android-34 and build-tools 34.0.0, so no extra SDK setup step
+      # is required.
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.2'
 
+      # This repository intentionally ships no gradle-wrapper.jar (every tracked
+      # file stays text-only), so the provisioned `gradle` is invoked directly
+      # instead of ./gradlew.
       - name: Build debug APK
-        id: build
-        continue-on-error: true
         run: gradle :app:assembleDebug --no-daemon --console=plain --stacktrace
 
       - name: Upload APK
-        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
@@ -47,19 +53,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Temporary diagnostics: when the build fails, re-run it once and publish
-      # the compiler output into the repository so the error text can be read
-      # through the raw content endpoint. Guarded so it cannot loop forever.
-      - name: Publish build log to repo
-        if: steps.build.outcome == 'failure' && !contains(github.event.head_commit.message, '[ci-log]')
-        run: |
-          gradle :app:assembleDebug --no-daemon --console=plain 2>&1 | tail -c 100000 > ci-build-log.txt || true
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f ci-build-log.txt
-          git commit -m "ci(log): capture build failure [ci-log]" || true
-          git push || true
-
-      - name: Fail the job if the build failed
-        if: steps.build.outcome == 'failure'
-        run: exit 1
+      - name: Upload build reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            **/build/reports/**
+            **/build/outputs/logs/**
+          if-no-files-found: ignore
+          retention-days: 7
