@@ -5,20 +5,20 @@ Warning: SDK processing. This version only understands SDK XML versions up to 3 
 > Task :app:preDebugBuild UP-TO-DATE
 > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
 > Task :app:checkKotlinGradlePluginConfigurationErrors
-> Task :app:checkDebugAarMetadata FAILED
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1795531394694.json
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+
+> Task :app:mergeDebugResources FAILED
+ERROR: [color/ic_launcher_background] /home/runner/work/ZiP2GiT/ZiP2GiT/app/src/main/res/values/colors.xml [color/ic_launcher_background] /home/runner/work/ZiP2GiT/ZiP2GiT/app/src/main/res/values/ic_launcher_background.xml: Resource and asset merger: Duplicate resources
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1795531454975.json
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
-Execution failed for task ':app:checkDebugAarMetadata'.
-> Could not resolve all files for configuration ':app:debugRuntimeClasspath'.
-   > Could not find com.squareup.retrofit2:converter-kotlinx-serialization:2.9.0.
-     Searched in the following locations:
-       - https://dl.google.com/dl/android/maven2/com/squareup/retrofit2/converter-kotlinx-serialization/2.9.0/converter-kotlinx-serialization-2.9.0.pom
-       - https://repo.maven.apache.org/maven2/com/squareup/retrofit2/converter-kotlinx-serialization/2.9.0/converter-kotlinx-serialization-2.9.0.pom
-     Required by:
-         project :app
+Execution failed for task ':app:mergeDebugResources'.
+> [color/ic_launcher_background] /home/runner/work/ZiP2GiT/ZiP2GiT/app/src/main/res/values/colors.xml	[color/ic_launcher_background] /home/runner/work/ZiP2GiT/ZiP2GiT/app/src/main/res/values/ic_launcher_background.xml: Error: Duplicate resources
 
 * Try:
 > Run with --stacktrace option to get the stack trace.
@@ -26,5 +26,5 @@ Execution failed for task ':app:checkDebugAarMetadata'.
 > Run with --scan to get full insights.
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 8s
-2 actionable tasks: 2 executed
+BUILD FAILED in 6s
+5 actionable tasks: 2 executed, 3 up-to-date
