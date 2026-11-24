@@ -1,2 +1,0 @@
-diagnostic file one
-version 2 - updated
