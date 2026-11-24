@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<backup-rules>
+    <!-- Tokens live in EncryptedSharedPreferences; the fallback store is excluded
+         from cloud backup so credentials are never uploaded. -->
+    <exclude domain="sharedpref" path="zip2git_secure_prefs.xml" />
+    <exclude domain="sharedpref" path="zip2git_secure_prefs_fallback.xml" />
+</backup-rules>
