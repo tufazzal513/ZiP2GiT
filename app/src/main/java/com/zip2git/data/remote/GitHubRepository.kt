@@ -158,7 +158,7 @@ class GitHubRepository(private val api: GitHubApi = NetworkModule.gitHubApi) {
 
     // -- helpers ---------------------------------------------------------------
 
-    private suspend fun <T> call(block: () -> Response<T>): T {
+    private suspend fun <T> call(block: suspend () -> Response<T>): T {
         val response = withContext(Dispatchers.IO) { block() }
         if (response.isSuccessful) {
             return response.body() ?: throw GitHubApiException(

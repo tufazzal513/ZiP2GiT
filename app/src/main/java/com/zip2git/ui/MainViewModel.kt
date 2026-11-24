@@ -285,18 +285,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val state = _uiState.value
         val source = projectSource
         val details = state.repo
-        when {
-            source == null -> {
-                _uiState.update {
-                    it.copy(banner = "Please choose a ZIP file or individual files to synchronize.")
-                }
-                return
+        if (source == null) {
+            _uiState.update {
+                it.copy(banner = "Please choose a ZIP file or individual files to synchronize.")
             }
-            details == null -> return
-            state.selectedBranch.isBlank() -> {
-                _uiState.update { it.copy(banner = "Please specify the repository branch name.") }
-                return
-            }
+            return
+        }
+        if (details == null) return
+        if (state.selectedBranch.isBlank()) {
+            _uiState.update { it.copy(banner = "Please specify the repository branch name.") }
+            return
         }
 
         val branch = state.selectedBranch
