@@ -6,7 +6,7 @@ Warning: SDK processing. This version only understands SDK XML versions up to 3 
 > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
 > Task :app:checkKotlinGradlePluginConfigurationErrors
 > Task :app:checkDebugAarMetadata FAILED
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1795531166099.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1795531394694.json
 
 FAILURE: Build failed with an exception.
 
@@ -26,5 +26,5 @@ Execution failed for task ':app:checkDebugAarMetadata'.
 > Run with --scan to get full insights.
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 6s
+BUILD FAILED in 8s
 2 actionable tasks: 2 executed
