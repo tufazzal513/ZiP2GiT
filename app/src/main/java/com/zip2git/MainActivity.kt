@@ -104,6 +104,12 @@ class MainActivity : ComponentActivity() {
                             onDismissBanner = viewModel::dismissBanner,
                             onDismissError = viewModel::dismissError,
                             onOpenRecent = viewModel::openRecent,
+                            onToggleAdvanced = viewModel::toggleAdvanced,
+                            onKeepImportantChange = viewModel::setKeepImportantFiles,
+                            onStripRootChange = viewModel::setStripRootFolder,
+                            onAddFilterRule = viewModel::addFilterRule,
+                            onRemoveFilterRule = viewModel::removeFilterRule,
+                            onToggleFilterRule = viewModel::toggleFilterRule,
                         )
 
                         Screen.SYNC -> SyncScreen(

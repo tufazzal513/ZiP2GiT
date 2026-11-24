@@ -1,6 +1,8 @@
 package com.zip2git.domain
 
 import android.util.Base64
+import com.zip2git.data.model.CompareOptions
+import com.zip2git.data.model.GhTreeEntryRequest
 import com.zip2git.data.model.SyncProgress
 import com.zip2git.data.model.SyncStep
 import com.zip2git.data.remote.GitHubRepository
@@ -91,7 +93,7 @@ class SyncEngine(private val repo: GitHubRepository) {
         branch: String,
         commitMessage: String,
         source: ProjectSource,
-        mirrorSync: Boolean,
+        options: CompareOptions,
         defaultBranch: String,
         isEmptyRepo: Boolean,
         onProgress: suspend (SyncProgress) -> Unit,
@@ -101,7 +103,7 @@ class SyncEngine(private val repo: GitHubRepository) {
         onProgress(
             SyncProgress(
                 step = SyncStep.FETCHING_TREE,
-                message = "Reading existing repository tree...",
+                message = "Checking repository state...",
             ),
         )
 
@@ -112,7 +114,7 @@ class SyncEngine(private val repo: GitHubRepository) {
         val comparison = DiffEngine.compare(
             localFiles = source.entries,
             remoteTree = remoteTree,
-            options = com.zip2git.data.model.CompareOptions(mirrorSync = mirrorSync),
+            options = options,
         )
 
         if (!comparison.hasChanges) {
@@ -154,13 +156,13 @@ class SyncEngine(private val repo: GitHubRepository) {
             )
         }
 
-        onProgress(SyncProgress(step = SyncStep.BUILDING_TREE, message = "Building tree..."))
+        onProgress(SyncProgress(step = SyncStep.BUILDING_TREE, message = "Building Git tree..."))
 
-        val treeEntries = ArrayList<com.zip2git.data.model.GhTreeEntryRequest>()
+        val treeEntries = ArrayList<GhTreeEntryRequest>()
         for (file in toUpload) {
             val sha = blobShas[file.path] ?: continue
             treeEntries.add(
-                com.zip2git.data.model.GhTreeEntryRequest(
+                GhTreeEntryRequest(
                     path = file.path,
                     mode = GitTreeMode.FILE,
                     type = GitTreeMode.BLOB,
@@ -170,7 +172,7 @@ class SyncEngine(private val repo: GitHubRepository) {
         }
         for (deleted in comparison.deleted) {
             treeEntries.add(
-                com.zip2git.data.model.GhTreeEntryRequest(
+                GhTreeEntryRequest(
                     path = deleted,
                     mode = GitTreeMode.FILE,
                     type = GitTreeMode.BLOB,

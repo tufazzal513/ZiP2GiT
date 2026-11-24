@@ -10,6 +10,7 @@ import com.zip2git.data.model.CompareOptions
 import com.zip2git.data.model.GitHubApiException
 import com.zip2git.data.model.GhUserResponse
 import com.zip2git.data.model.RecentPushItem
+import com.zip2git.data.model.SmartFilterRule
 import com.zip2git.data.model.SourceType
 import com.zip2git.data.model.SyncErrorInfo
 import com.zip2git.data.model.SyncProgress
@@ -49,6 +50,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             tokenIsSet = appContainer.tokenStore.hasToken(),
             connectedLogin = appContainer.tokenStore.lastUserLogin.orEmpty(),
             recentPushes = appContainer.historyStore.items,
+            filterRules = appContainer.filterStore.rules,
+            keepImportantFiles = appContainer.filterStore.keepImportantFiles,
+            stripRootFolder = appContainer.filterStore.stripRootFolder,
         ),
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -172,6 +176,46 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setMirrorSync(enabled: Boolean) = _uiState.update { it.copy(mirrorSync = enabled) }
 
+    // -- advanced options ------------------------------------------------------
+
+    fun toggleAdvanced() = _uiState.update { it.copy(showAdvanced = !it.showAdvanced) }
+
+    fun setKeepImportantFiles(enabled: Boolean) {
+        appContainer.filterStore.keepImportantFiles = enabled
+        _uiState.update { it.copy(keepImportantFiles = enabled) }
+    }
+
+    fun setStripRootFolder(enabled: Boolean) {
+        appContainer.filterStore.stripRootFolder = enabled
+        _uiState.update { it.copy(stripRootFolder = enabled) }
+    }
+
+    fun addFilterRule(pattern: String) {
+        val trimmed = pattern.trim()
+        if (trimmed.isEmpty()) return
+        val rules = _uiState.value.filterRules.toMutableList()
+        rules += SmartFilterRule(trimmed)
+        appContainer.filterStore.rules = rules
+        _uiState.update { it.copy(filterRules = rules) }
+        refreshComparison()
+    }
+
+    fun removeFilterRule(pattern: String) {
+        val rules = _uiState.value.filterRules.filterNot { it.pattern == pattern }
+        appContainer.filterStore.rules = rules
+        _uiState.update { it.copy(filterRules = rules) }
+        refreshComparison()
+    }
+
+    fun toggleFilterRule(pattern: String) {
+        val rules = _uiState.value.filterRules.map {
+            if (it.pattern == pattern) it.copy(enabled = !it.enabled) else it
+        }
+        appContainer.filterStore.rules = rules
+        _uiState.update { it.copy(filterRules = rules) }
+        refreshComparison()
+    }
+
     // -- source selection ------------------------------------------------------
 
     /** Loads a picked ZIP stream into memory and computes the diff. */
@@ -183,7 +227,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             runCatching {
                 val bytes = openStream()?.use { it.readBytes() }
                     ?: throw IllegalStateException("Unable to open selected ZIP file.")
-                ZipProjectSource.from(bytes, stripRoot = true)
+                ZipProjectSource.from(bytes, stripRoot = _uiState.value.stripRootFolder)
             }.onSuccess { source ->
                 projectSource = source
                 _uiState.update {
@@ -269,7 +313,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 DiffEngine.compare(
                     localFiles = source.entries,
                     remoteTree = tree,
-                    options = CompareOptions(mirrorSync = _uiState.value.mirrorSync),
+                    options = CompareOptions(
+                        mirrorSync = _uiState.value.mirrorSync,
+                        filterRules = _uiState.value.filterRules,
+                        keepImportantFiles = _uiState.value.keepImportantFiles,
+                    ),
                 )
             }.onSuccess { comparison ->
                 _uiState.update { it.copy(comparison = comparison) }
@@ -310,7 +358,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     branch = branch,
                     commitMessage = state.commitMessage,
                     source = source,
-                    mirrorSync = state.mirrorSync,
+                    options = CompareOptions(
+                        mirrorSync = state.mirrorSync,
+                        filterRules = state.filterRules,
+                        keepImportantFiles = state.keepImportantFiles,
+                    ),
                     defaultBranch = details.defaultBranch,
                     isEmptyRepo = false,
                     onProgress = { progress -> _uiState.update { it.copy(syncProgress = progress) } },
@@ -421,6 +473,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 screen = Screen.SETUP,
                 darkTheme = appContainer.themeStore.darkMode,
                 recentPushes = appContainer.historyStore.items,
+                filterRules = appContainer.filterStore.rules,
+                keepImportantFiles = appContainer.filterStore.keepImportantFiles,
+                stripRootFolder = appContainer.filterStore.stripRootFolder,
             )
         }
     }

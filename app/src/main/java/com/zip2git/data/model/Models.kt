@@ -101,6 +101,46 @@ data class RecentPushItem(
     @SerialName("timestamp") val timestamp: Long,
 )
 
+/** How locally-touched paths are applied to the remote tree. */
+enum class PushMode {
+    /** Only add/update; never remove anything that already exists remotely. */
+    PREVIEW,
+
+    /** Make the branch an exact copy: missing locally means deleted remotely. */
+    MIRROR,
+}
+
+/** The reviewer's verdict for one path in the Smart File Filter list. */
+enum class FilterDecision {
+    KEEP,
+    SKIP,
+}
+
+/**
+ * One Smart File Filter rule. Rules are glob-ish suffixes matched against the
+ * path, e.g. `.md`, `node_modules/`, `*.log`.
+ */
+@Serializable
+data class SmartFilterRule(
+    val pattern: String,
+    val decision: FilterDecision = FilterDecision.SKIP,
+    val enabled: Boolean = true,
+) {
+    /**
+     * A rule matches when the path equals the pattern, ends with it, or (for
+     * patterns wrapped in `*`) matches the trailing extension.
+     */
+    fun matches(path: String): Boolean {
+        if (pattern.isBlank()) return false
+        val p = pattern.trim()
+        return when {
+            p.startsWith("*") -> path.endsWith(p.removePrefix("*"))
+            p.endsWith("/") -> path.startsWith(p) || path.contains("/$p")
+            else -> path == p || path.endsWith("/$p") || path.endsWith(p)
+        }
+    }
+}
+
 /** Options that control how the local tree is applied to the remote tree. */
 data class CompareOptions(
     /**
@@ -109,6 +149,13 @@ data class CompareOptions(
      * are pushed and remote-only files are left alone.
      */
     val mirrorSync: Boolean,
+    /** Paths matched by an enabled Smart File Filter rule are not pushed. */
+    val filterRules: List<SmartFilterRule> = emptyList(),
+    /**
+     * When true, files such as README, LICENSE, .gitignore and `.github/` are
+     * kept on the remote even when Mirror Sync would otherwise delete them.
+     */
+    val keepImportantFiles: Boolean = true,
 )
 
 /** Request payload for a sync run. */

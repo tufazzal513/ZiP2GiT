@@ -17,6 +17,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DarkMode
@@ -49,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zip2git.data.model.ChangeStatus
@@ -87,6 +92,12 @@ fun DashboardScreen(
     onDismissBanner: () -> Unit,
     onDismissError: () -> Unit,
     onOpenRecent: (RecentPushItem) -> Unit,
+    onToggleAdvanced: () -> Unit,
+    onKeepImportantChange: (Boolean) -> Unit,
+    onStripRootChange: (Boolean) -> Unit,
+    onAddFilterRule: (String) -> Unit,
+    onRemoveFilterRule: (String) -> Unit,
+    onToggleFilterRule: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -184,6 +195,18 @@ fun DashboardScreen(
             }
 
             item {
+                AdvancedOptionsCard(
+                    state = state,
+                    onToggle = onToggleAdvanced,
+                    onKeepImportantChange = onKeepImportantChange,
+                    onStripRootChange = onStripRootChange,
+                    onAddFilterRule = onAddFilterRule,
+                    onRemoveFilterRule = onRemoveFilterRule,
+                    onToggleFilterRule = onToggleFilterRule,
+                )
+            }
+
+            item {
                 CommitCard(
                     state = state,
                     onCommitMessageChange = onCommitMessageChange,
@@ -194,7 +217,7 @@ fun DashboardScreen(
             if (state.recentPushes.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Recent pushes",
+                        text = "Recently completed work:",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(top = 6.dp),
@@ -204,6 +227,27 @@ fun DashboardScreen(
                     RecentPushRow(item = it, onClick = { onOpenRecent(it) })
                 }
             }
+
+            item { AboutCard() }
+        }
+    }
+}
+
+@Composable
+private fun AboutCard() {
+    SectionCard(title = "About Zip2Git", subtitle = "Sync project files via Zip2Git") {
+        listOf(
+            "1. Direct Connection: All network requests communicate directly between your device and api.github.com.",
+            "2. No Cloud Relay: No code, tokens, or analytics are transmitted to any third-party or intermediate server.",
+            "3. Secure Credential Storage: Personal Access Tokens are encrypted and stored solely within private device storage. Tokens are never uploaded anywhere except to authenticate directly with GitHub.",
+            "4. Local File Processing: Archive extraction, blob hashing, and tree diffing happen entirely in-memory on your phone.",
+        ).forEach { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 3.dp),
+            )
         }
     }
 }
@@ -485,6 +529,168 @@ private fun ComparisonCard(
                 )
             }
             Switch(checked = mirrorSync, onCheckedChange = onMirrorSyncChange)
+        }
+    }
+}
+
+@Composable
+private fun AdvancedOptionsCard(
+    state: MainUiState,
+    onToggle: () -> Unit,
+    onKeepImportantChange: (Boolean) -> Unit,
+    onStripRootChange: (Boolean) -> Unit,
+    onAddFilterRule: (String) -> Unit,
+    onRemoveFilterRule: (String) -> Unit,
+    onToggleFilterRule: (String) -> Unit,
+) {
+    SectionCard(
+        title = "Advanced Options",
+        trailing = {
+            IconButton(onClick = onToggle) {
+                Icon(
+                    imageVector = if (state.showAdvanced) {
+                        Icons.Filled.ExpandLess
+                    } else {
+                        Icons.Filled.ExpandMore
+                    },
+                    contentDescription = if (state.showAdvanced) "Collapse" else "Expand",
+                )
+            }
+        },
+    ) {
+        if (!state.showAdvanced) {
+            Text(
+                "Smart File Filter, Keep important files, Strip root folder",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Keep important files",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "Preserve README, LICENSE, .github/ and .gitignore in Mirror Sync",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = state.keepImportantFiles,
+                    onCheckedChange = onKeepImportantChange,
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Strip root folder", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Remove the single top-level folder when importing a ZIP",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = state.stripRootFolder,
+                    onCheckedChange = onStripRootChange,
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Smart File Filter rules",
+                style = MaterialTheme.typography.titleSmall,
+            )
+            if (state.filterRules.isEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "No rules yet. Add one below, e.g. build/ or *.log",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Spacer(Modifier.height(8.dp))
+                state.filterRules.forEach { rule ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Switch(
+                            checked = rule.enabled,
+                            onCheckedChange = { onToggleFilterRule(rule.pattern) },
+                            modifier = Modifier.scale(0.85f),
+                        )
+                        Text(
+                            text = rule.pattern,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (rule.enabled) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            },
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        IconButton(
+                            onClick = { onRemoveFilterRule(rule.pattern) },
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Remove ${rule.pattern}",
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            AddRuleRow(onAdd = onAddFilterRule)
+        }
+    }
+}
+
+@Composable
+private fun AddRuleRow(onAdd: (String) -> Unit) {
+    var input by remember { mutableStateOf("") }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it },
+            modifier = Modifier.weight(1f),
+            label = { Text("Pattern (e.g. *.log)") },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+        )
+        Button(
+            onClick = {
+                onAdd(input)
+                input = ""
+            },
+            enabled = input.isNotBlank(),
+            shape = RoundedCornerShape(12.dp),
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Add")
         }
     }
 }
