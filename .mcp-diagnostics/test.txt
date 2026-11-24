@@ -1,0 +1,2 @@
+diagnostic file one
+version 1
