@@ -80,6 +80,7 @@ object DiffEngine {
         options: CompareOptions,
     ): FileComparison {
         val filtered = applyFilters(localFiles, options.filterRules)
+            .filterNot { options.excludedPaths.contains(it.path) }
         val remoteByPath = remoteTree.associateBy { it.path }
         val localPaths = HashSet<String>(filtered.size)
 

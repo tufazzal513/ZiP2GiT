@@ -7,12 +7,11 @@ import androidx.lifecycle.viewModelScope
 import com.zip2git.Zip2GitApp
 import com.zip2git.data.model.BranchInfo
 import com.zip2git.data.model.CompareOptions
-import com.zip2git.data.model.GitHubApiException
 import com.zip2git.data.model.GhUserResponse
 import com.zip2git.data.model.RecentPushItem
+import com.zip2git.data.model.RepoSummary
 import com.zip2git.data.model.SmartFilterRule
 import com.zip2git.data.model.SourceType
-import com.zip2git.data.model.SyncErrorInfo
 import com.zip2git.data.model.SyncProgress
 import com.zip2git.data.model.SyncResult
 import com.zip2git.data.model.SyncStep
@@ -22,7 +21,6 @@ import com.zip2git.domain.DiffEngine
 import com.zip2git.domain.ErrorMapper
 import com.zip2git.domain.ProjectSource
 import com.zip2git.domain.RepoUrlParser
-import com.zip2git.domain.RepositoryChangedException
 import com.zip2git.domain.SafProjectSource
 import com.zip2git.domain.SyncEngine
 import com.zip2git.domain.ZipProjectSource
@@ -115,6 +113,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 screen = Screen.DASHBOARD,
             )
         }
+        loadUserRepos()
         loadRepository(owner, name)
     }
 
@@ -161,15 +160,107 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val candidates = (listOf(details.defaultBranch, "main", "master") +
                 _uiState.value.repoBranches.map { it.name }).distinct()
-            val branches = repo.listBranches(details.owner, details.name, candidates)
-                .map { BranchInfo(it.name, it.sha) }
-            _uiState.update {
-                it.copy(isFetchingBranches = false, repoBranches = branches)
+            runCatching {
+                repo.listBranches(details.owner, details.name, candidates)
+                    .map { BranchInfo(it.name, it.sha) }
+            }.onSuccess { branches ->
+                _uiState.update {
+                    it.copy(isFetchingBranches = false, repoBranches = branches)
+                }
+            }.onFailure {
+                _uiState.update { it.copy(isFetchingBranches = false) }
             }
         }
     }
 
     fun onBranchChange(branch: String) = _uiState.update { it.copy(selectedBranch = branch) }
+
+    // -- repository picker -----------------------------------------------------
+
+    /** Backs the "Referesh repositories list" action next to the dropdown. */
+    fun loadUserRepos() {
+        _uiState.update { it.copy(isFetchingRepos = true, repoValidationMessage = null) }
+        viewModelScope.launch {
+            runCatching { repo.listUserRepos() }
+                .onSuccess { repos ->
+                    _uiState.update {
+                        it.copy(
+                            isFetchingRepos = false,
+                            availableRepos = repos,
+                            repoValidationMessage =
+                                if (repos.isEmpty()) {
+                                    "No repositories found for this token."
+                                } else {
+                                    "Connected as @${it.connectedLogin} (${repos.size} repos found)"
+                                },
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isFetchingRepos = false,
+                            repoValidationMessage = ErrorMapper.map(error).message,
+                        )
+                    }
+                }
+        }
+    }
+
+    /** "Select from your repos": fills the URL field and loads the repository. */
+    fun selectRepoFromList(summary: RepoSummary) {
+        _uiState.update {
+            it.copy(
+                repoUrlInput = "https://github.com/${summary.fullName}",
+                banner = null,
+                syncError = null,
+            )
+        }
+        loadRepository(summary.owner, summary.name, preferredBranch = summary.defaultBranch)
+    }
+
+    /**
+     * "Test Token & Load Repos": saves the PAT when it was edited, validates it
+     * with `GET /user`, then fills the "Select from your repos" dropdown.
+     */
+    fun testTokenAndLoadRepos() {
+        val state = _uiState.value
+        val inputToken = state.tokenInput.trim().ifBlank { appContainer.tokenStore.token.orEmpty() }
+        if (inputToken.isBlank()) {
+            _uiState.update {
+                it.copy(tokenValidationMessage = "Please enter a Personal Access Token first.")
+            }
+            return
+        }
+
+        appContainer.tokenStore.token = inputToken
+        _uiState.update { it.copy(isValidatingToken = true, tokenValidationMessage = null) }
+
+        viewModelScope.launch {
+            runCatching { repo.getUser() }
+                .onSuccess { user ->
+                    appContainer.tokenStore.lastUserLogin = user.login
+                    _uiState.update {
+                        it.copy(
+                            isValidatingToken = false,
+                            tokenIsSet = true,
+                            connectedLogin = user.login,
+                            tokenInput = "",
+                            tokenValidationMessage = "Connected as @${user.login}",
+                        )
+                    }
+                    loadUserRepos()
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            isValidatingToken = false,
+                            tokenValidationMessage = ErrorMapper.map(error).message,
+                        )
+                    }
+                }
+        }
+    }
 
     fun onCommitMessageChange(message: String) =
         _uiState.update { it.copy(commitMessage = message) }
@@ -216,6 +307,58 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshComparison()
     }
 
+    // -- per-file review -------------------------------------------------------
+
+    /**
+     * Unchecks a path in the change review: it is treated as never selected, so
+     * it is neither uploaded nor counted as a deletion.
+     */
+    fun togglePathExcluded(path: String) {
+        val current = _uiState.value.excludedPaths
+        val next = if (current.contains(path)) current - path else current + path
+        _uiState.update { it.copy(excludedPaths = next) }
+        refreshComparison()
+    }
+
+    fun clearExcludedPaths() {
+        _uiState.update { it.copy(excludedPaths = emptySet()) }
+        refreshComparison()
+    }
+
+    /** Expands the local/remote preview row for [path], or collapses it. */
+    fun toggleExpandedPath(path: String) {
+        _uiState.update {
+            it.copy(expandedPath = if (it.expandedPath == path) null else path)
+        }
+    }
+
+    /** "Inspect Changes & Validate": validates the branch, then runs the diff. */
+    fun inspectChanges() {
+        val state = _uiState.value
+        val details = state.repo
+        if (projectSource == null) {
+            _uiState.update { it.copy(banner = "Pick a ZIP, Folder, or individual files to upload") }
+            return
+        }
+        if (details == null) {
+            _uiState.update { it.copy(banner = "Load a GitHub repository first.") }
+            return
+        }
+        if (state.selectedBranch.isBlank()) {
+            _uiState.update { it.copy(banner = "Please specify the repository branch name.") }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                showReview = true,
+                banner = null,
+                syncError = null,
+                syncProgress = SyncProgress(SyncStep.VALIDATING_REPO, "Checking GitHub repository & permissions..."),
+            )
+        }
+        refreshComparison()
+    }
+
     // -- source selection ------------------------------------------------------
 
     /** Loads a picked ZIP stream into memory and computes the diff. */
@@ -235,6 +378,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         isProcessingZip = false,
                         sourceType = SourceType.ZIP,
                         totalZipFiles = source.entries.size,
+                        totalZipBytes = source.entries.sumOf { it.size },
+                        excludedPaths = emptySet(),
+                        expandedPath = null,
+                        showReview = false,
                     )
                 }
                 refreshComparison()
@@ -259,6 +406,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             sourceType = SourceType.FOLDER,
                             sourceName = uri.lastPathSegment ?: "folder",
                             totalZipFiles = source.entries.size,
+                            totalZipBytes = source.entries.sumOf { it.size },
+                            excludedPaths = emptySet(),
+                            expandedPath = null,
+                            showReview = false,
                         )
                     }
                     refreshComparison()
@@ -284,6 +435,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             sourceType = SourceType.FILES,
                             sourceName = "${source.entries.size} file(s) selected",
                             totalZipFiles = source.entries.size,
+                            totalZipBytes = source.entries.sumOf { it.size },
+                            excludedPaths = emptySet(),
+                            expandedPath = null,
+                            showReview = false,
                         )
                     }
                     refreshComparison()
@@ -293,6 +448,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         it.copy(isProcessingZip = false, syncError = ErrorMapper.map(error), comparison = null)
                     }
                 }
+        }
+    }
+
+    /** Clears the picked source so the user can choose a different ZIP/folder/files. */
+    fun clearSource() {
+        projectSource?.close()
+        projectSource = null
+        _uiState.update {
+            it.copy(
+                sourceType = null,
+                sourceName = "",
+                totalZipFiles = 0,
+                totalZipBytes = 0,
+                comparison = null,
+                excludedPaths = emptySet(),
+                expandedPath = null,
+                showReview = false,
+            )
         }
     }
 
@@ -316,13 +489,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     options = CompareOptions(
                         mirrorSync = _uiState.value.mirrorSync,
                         filterRules = _uiState.value.filterRules,
+                        excludedPaths = _uiState.value.excludedPaths,
                         keepImportantFiles = _uiState.value.keepImportantFiles,
                     ),
                 )
             }.onSuccess { comparison ->
-                _uiState.update { it.copy(comparison = comparison) }
+                _uiState.update { it.copy(comparison = comparison, syncProgress = null) }
             }.onFailure { error ->
-                _uiState.update { it.copy(syncError = ErrorMapper.map(error)) }
+                _uiState.update {
+                    it.copy(syncError = ErrorMapper.map(error), syncProgress = null)
+                }
             }
         }
     }
@@ -361,6 +537,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     options = CompareOptions(
                         mirrorSync = state.mirrorSync,
                         filterRules = state.filterRules,
+                        excludedPaths = state.excludedPaths,
                         keepImportantFiles = state.keepImportantFiles,
                     ),
                     defaultBranch = details.defaultBranch,
@@ -434,7 +611,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 sourceType = null,
                 sourceName = "",
                 totalZipFiles = 0,
+                totalZipBytes = 0,
                 comparison = null,
+                excludedPaths = emptySet(),
+                expandedPath = null,
+                showReview = false,
                 syncProgress = null,
                 syncResult = null,
                 syncError = null,

@@ -31,6 +31,17 @@ interface GitHubApi {
     @GET("user")
     suspend fun getUser(): Response<GhUserResponse>
 
+    /**
+     * `GET /user/repos` — every repository the token can push to, newest first.
+     * Backs the "Select from your repos" dropdown.
+     */
+    @GET("user/repos")
+    suspend fun listUserRepos(
+        @Query("per_page") perPage: Int = 100,
+        @Query("sort") sort: String = "updated",
+        @Query("affiliation") affiliation: String = "owner,collaborator,organization_member",
+    ): Response<List<GhRepoResponse>>
+
     /** `GET /repos/{owner}/{repo}` — repository metadata, permissions and default branch. */
     @GET("repos/{owner}/{repo}")
     suspend fun getRepo(

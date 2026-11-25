@@ -29,10 +29,11 @@ data class GhPermissions(
 
 @Serializable
 data class GhRepoResponse(
-    @SerialName("id") val id: Long,
+    @SerialName("id") val id: Long = 0,
     @SerialName("name") val name: String,
-    @SerialName("full_name") val fullName: String,
-    @SerialName("owner") val owner: GhUserResponse,
+    @SerialName("full_name") val fullName: String = "",
+    /** Only `login` is read, so the full user object is not modelled here. */
+    @SerialName("owner") val owner: GhRepoSummaryOwner = GhRepoSummaryOwner(),
     @SerialName("private") val isPrivate: Boolean = false,
     @SerialName("default_branch") val defaultBranch: String = "main",
     @SerialName("empty") val isEmpty: Boolean = false,
@@ -57,6 +58,30 @@ data class GhBranchSummary(
     @SerialName("name") val name: String,
     @SerialName("sha") val sha: String,
 )
+
+/**
+ * The `owner` object of `GET /user/repos`, reduced to the one field the repo
+ * picker needs. The endpoint really returns a full owner object, but modelling
+ * only `login` keeps the DTO small and lets `full_name` act as the fallback.
+ */
+@Serializable
+data class GhRepoSummaryOwner(
+    @SerialName("login") val login: String = "",
+)
+
+/**
+ * One entry of `GET /user/repos`, flattened for the "Select from your repos"
+ * dropdown. Only the fields the picker shows are kept.
+ */
+data class RepoSummary(
+    val owner: String,
+    val name: String,
+    val isPrivate: Boolean,
+    val defaultBranch: String,
+) {
+    /** `owner/name`, the label the original app shows in the dropdown. */
+    val fullName: String get() = "$owner/$name"
+}
 
 @Serializable
 data class GhTreeRef(

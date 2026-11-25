@@ -102,8 +102,19 @@ class SyncEngine(private val repo: GitHubRepository) {
 
         onProgress(
             SyncProgress(
+                step = SyncStep.READING_ZIP,
+                message = when (source.sourceType) {
+                    com.zip2git.data.model.SourceType.ZIP -> "Extracting files from ZIP..."
+                    com.zip2git.data.model.SourceType.FOLDER -> "Scanning folder files..."
+                    com.zip2git.data.model.SourceType.FILES -> "Reading selected files..."
+                },
+            ),
+        )
+
+        onProgress(
+            SyncProgress(
                 step = SyncStep.FETCHING_TREE,
-                message = "Checking repository state...",
+                message = "Calculating file hashes & comparing tree...",
             ),
         )
 
@@ -199,8 +210,20 @@ class SyncEngine(private val repo: GitHubRepository) {
             if (currentTip != plan.baseCommitSha) {
                 throw RepositoryChangedException()
             }
+            onProgress(
+                SyncProgress(
+                    step = SyncStep.CREATING_COMMIT,
+                    message = "Updating branch \"$branch\"...",
+                ),
+            )
             repo.updateRef(owner, repoName, branch, commit.sha, force = false)
         } else {
+            onProgress(
+                SyncProgress(
+                    step = SyncStep.CREATING_COMMIT,
+                    message = "Creating branch \"$branch\"...",
+                ),
+            )
             repo.createRef(owner, repoName, branch, commit.sha)
         }
 

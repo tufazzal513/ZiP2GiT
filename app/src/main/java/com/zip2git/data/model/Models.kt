@@ -152,6 +152,12 @@ data class CompareOptions(
     /** Paths matched by an enabled Smart File Filter rule are not pushed. */
     val filterRules: List<SmartFilterRule> = emptyList(),
     /**
+     * Exact local paths the user unchecked in the change review. They behave as if
+     * they were never selected, so they are neither uploaded nor treated as
+     * deletions.
+     */
+    val excludedPaths: Set<String> = emptySet(),
+    /**
      * When true, files such as README, LICENSE, .gitignore and `.github/` are
      * kept on the remote even when Mirror Sync would otherwise delete them.
      */

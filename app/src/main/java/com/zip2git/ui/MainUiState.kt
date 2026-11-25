@@ -4,6 +4,7 @@ import com.zip2git.data.model.BranchInfo
 import com.zip2git.data.model.FileComparison
 import com.zip2git.data.model.RecentPushItem
 import com.zip2git.data.model.RepoDetails
+import com.zip2git.data.model.RepoSummary
 import com.zip2git.data.model.SmartFilterRule
 import com.zip2git.data.model.SourceType
 import com.zip2git.data.model.SyncErrorInfo
@@ -35,6 +36,12 @@ data class MainUiState(
     val isInitializingRepo: Boolean = false,
     val repoBranches: List<BranchInfo> = emptyList(),
     val isFetchingBranches: Boolean = false,
+
+    // "Select from your repos" dropdown
+    val availableRepos: List<RepoSummary> = emptyList(),
+    val isFetchingRepos: Boolean = false,
+    val repoValidationMessage: String? = null,
+
     val selectedBranch: String = "",
     val commitMessage: String = "Initial commit via Zip2Git",
 
@@ -42,6 +49,8 @@ data class MainUiState(
     val sourceType: SourceType? = null,
     val sourceName: String = "",
     val totalZipFiles: Int = 0,
+    /** Sum of the uncompressed sizes, shown as "12 files • 6.1 MB". */
+    val totalZipBytes: Long = 0,
     val isProcessingZip: Boolean = false,
     val mirrorSync: Boolean = false,
 
@@ -53,6 +62,12 @@ data class MainUiState(
 
     // Diff + sync
     val comparison: FileComparison? = null,
+    /** Exact local paths the user unchecked in the change review. */
+    val excludedPaths: Set<String> = emptySet(),
+    /** Path whose local/remote preview is expanded, or null. */
+    val expandedPath: String? = null,
+    /** True once "Inspect Changes & Validate" has been pressed. */
+    val showReview: Boolean = false,
     val syncProgress: SyncProgress? = null,
     val syncResult: SyncResult? = null,
     val syncError: SyncErrorInfo? = null,

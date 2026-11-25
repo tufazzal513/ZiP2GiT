@@ -20,6 +20,7 @@ import com.zip2git.data.model.GitHubApiException
 import com.zip2git.data.model.GitHubTreeItem
 import com.zip2git.data.model.GitEntryType
 import com.zip2git.data.model.RepoDetails
+import com.zip2git.data.model.RepoSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.serializer
@@ -40,6 +41,21 @@ class GitHubRepository(private val api: GitHubApi = NetworkModule.gitHubApi) {
         val dto = call { api.getRepo(owner, repo) }
         return dto.toRepoDetails()
     }
+
+    /**
+     * Every repo the token can reach, mapped to the lightweight [RepoSummary] the
+     * picker renders. `per_page=100` is GitHub's maximum, so this is capped at the
+     * 100 most recently updated repositories — plenty for a phone-side picker.
+     */
+    suspend fun listUserRepos(): List<RepoSummary> =
+        call { api.listUserRepos() }.map { dto ->
+            RepoSummary(
+                owner = dto.owner.login.ifBlank { dto.fullName.substringBefore('/') },
+                name = dto.name,
+                isPrivate = dto.isPrivate,
+                defaultBranch = dto.defaultBranch.ifBlank { "main" },
+            )
+        }
 
     suspend fun listBranches(owner: String, repo: String, branchNames: List<String>): List<GhBranchSummary> =
         withContext(Dispatchers.IO) {

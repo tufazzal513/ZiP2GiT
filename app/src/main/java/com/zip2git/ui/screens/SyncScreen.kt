@@ -49,11 +49,13 @@ fun SyncScreen(
 ) {
     val progress = state.syncProgress ?: SyncProgress(SyncStep.IDLE, "Starting…")
     val steps = listOf(
-        SyncStep.FETCHING_TREE to "Read remote tree",
+        SyncStep.VALIDATING_REPO to "Validate source & repository",
+        SyncStep.READING_ZIP to "Read project files",
+        SyncStep.FETCHING_TREE to "Compare with remote tree",
         SyncStep.SYNCING_BLOBS to "Upload changed files",
         SyncStep.BUILDING_TREE to "Build new tree",
-        SyncStep.CREATING_COMMIT to "Create commit",
-        SyncStep.DONE to "Update branch",
+        SyncStep.CREATING_COMMIT to "Create commit & update branch",
+        SyncStep.DONE to "Push to GitHub",
     )
     val currentIndex = steps.indexOfFirst { it.first == progress.step }
     val fraction = when {
