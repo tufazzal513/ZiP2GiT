@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
@@ -289,7 +290,6 @@ fun DashboardScreen(
                         excludedPaths = state.excludedPaths,
                         secretPaths = state.secretPaths,
                         onRefresh = onRefreshComparison,
-                        onToggleExcluded = onTogglePathExcluded,
                         onClearExcluded = onClearExcluded,
                         onStartSync = onStartSync,
                         isSyncing = state.isSyncing,
