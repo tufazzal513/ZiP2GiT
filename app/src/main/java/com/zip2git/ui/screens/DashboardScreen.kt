@@ -315,7 +315,6 @@ fun DashboardScreen(
                             onCommitMessageChange = onCommitMessageChange,
                         )
                     }
-                    item { CommitCard(state = state, onStartSync = onStartSync) }
                 }
 
                 WizardStep.HISTORY -> {
