@@ -80,8 +80,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             return
         }
-        val coords = RepoUrlParser.parseOrNull(state.repoUrlInput)
-        if (coords == null) {
+
+        // The URL is optional here: a blank field just means the repository is
+        // picked from the dropdown on the next wizard page.
+        val coords = state.repoUrlInput.trim().let {
+            if (it.isEmpty()) null else RepoUrlParser.parseOrNull(it)
+        }
+        if (coords == null && state.repoUrlInput.isNotBlank()) {
             _uiState.update {
                 it.copy(
                     tokenValidationMessage =
@@ -96,12 +101,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         viewModelScope.launch {
             runCatching { repo.getUser() }
-                .onSuccess { user -> onConnected(user, coords.owner, coords.name) }
+                .onSuccess { user ->
+                    onConnected(user, coords?.owner, coords?.name)
+                }
                 .onFailure { error -> reportSetupFailure(error) }
         }
     }
 
-    private fun onConnected(user: GhUserResponse, owner: String, name: String) {
+    private fun onConnected(user: GhUserResponse, owner: String?, name: String?) {
         appContainer.tokenStore.lastUserLogin = user.login
         _uiState.update {
             it.copy(
@@ -111,10 +118,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 tokenInput = "",
                 tokenValidationMessage = "Connected as @${user.login}",
                 screen = Screen.DASHBOARD,
+                step = WizardStep.REPOSITORY,
             )
         }
         loadUserRepos()
-        loadRepository(owner, name)
+        if (owner != null && name != null) loadRepository(owner, name)
     }
 
     private fun reportSetupFailure(error: Throwable) {
@@ -523,7 +531,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         val branch = state.selectedBranch
         _uiState.update {
-            it.copy(isSyncing = true, syncError = null, syncResult = null, screen = Screen.SYNC)
+            it.copy(isSyncing = true, syncError = null, syncResult = null, screen = Screen.SYNC, step = WizardStep.PROGRESS)
         }
 
         syncJob = viewModelScope.launch {
@@ -568,6 +576,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         syncResult = result,
                         recentPushes = appContainer.historyStore.items,
                         screen = Screen.RESULT,
+                        step = WizardStep.RESULT,
                     )
                 }
                 loadBranches()
@@ -577,6 +586,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         isSyncing = false,
                         syncError = ErrorMapper.map(error),
                         screen = Screen.RESULT,
+                        step = WizardStep.RESULT,
                     )
                 }
             }
@@ -591,6 +601,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 isSyncing = false,
                 syncProgress = null,
                 screen = Screen.DASHBOARD,
+                step = WizardStep.COMMIT,
                 banner = "Sync cancelled by user",
             )
         }
@@ -598,8 +609,89 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // -- navigation ------------------------------------------------------------
 
+    /**
+     * Jumps to any workflow page. Progress and Result are separate full screens,
+     * so they also switch [Screen]; every other page lives on the dashboard.
+     */
+    fun goToStep(step: WizardStep) {
+        val target = when (step) {
+            WizardStep.PROGRESS -> Screen.SYNC
+            WizardStep.RESULT -> Screen.RESULT
+            else -> Screen.DASHBOARD
+        }
+        _uiState.update { it.copy(step = step, screen = target, banner = null) }
+    }
+
+    /** Moves one page forward, guarding the pages that need data first. */
+    fun nextStep() {
+        val state = _uiState.value
+        when (state.step) {
+            WizardStep.TOKEN -> {
+                if (state.connectedLogin.isBlank()) {
+                    _uiState.update {
+                        it.copy(
+                            tokenValidationMessage =
+                                "Connect your GitHub token first, then continue.",
+                        )
+                    }
+                    return
+                }
+                goToStep(WizardStep.REPOSITORY)
+            }
+
+            WizardStep.REPOSITORY -> {
+                if (state.repo == null) {
+                    _uiState.update { it.copy(banner = "Load a GitHub repository first.") }
+                    return
+                }
+                loadBranches()
+                goToStep(WizardStep.SOURCE)
+            }
+
+            WizardStep.SOURCE -> {
+                if (state.sourceName.isBlank()) {
+                    _uiState.update {
+                        it.copy(banner = "Pick a ZIP, Folder, or individual files to upload")
+                    }
+                    return
+                }
+                goToStep(WizardStep.REVIEW)
+            }
+
+            // Review → commit is allowed even with nothing to upload, because the
+            // commit page is where the user sees "everything is up to date".
+            WizardStep.REVIEW -> goToStep(WizardStep.COMMIT)
+            WizardStep.COMMIT -> startSync()
+            WizardStep.PROGRESS -> goToStep(WizardStep.RESULT)
+            WizardStep.RESULT -> goToStep(WizardStep.HISTORY)
+            WizardStep.HISTORY -> startNewPush()
+        }
+    }
+
+    /** Moves one page back; the first page stays put. */
+    fun previousStep() {
+        val state = _uiState.value
+        when (state.step) {
+            WizardStep.TOKEN -> Unit
+            WizardStep.REPOSITORY -> goToStep(WizardStep.TOKEN)
+            WizardStep.SOURCE -> goToStep(WizardStep.REPOSITORY)
+            WizardStep.REVIEW -> goToStep(WizardStep.SOURCE)
+            WizardStep.COMMIT -> goToStep(WizardStep.REVIEW)
+            // Progress has no back button: the commit may already exist.
+            WizardStep.PROGRESS -> Unit
+            WizardStep.RESULT -> goToStep(WizardStep.COMMIT)
+            WizardStep.HISTORY -> goToStep(WizardStep.RESULT)
+        }
+    }
+
     fun goToDashboard() {
-        _uiState.update { it.copy(screen = Screen.DASHBOARD, syncError = null, syncResult = null) }
+        _uiState.update {
+            it.copy(
+                screen = Screen.DASHBOARD,
+                syncError = null,
+                syncResult = null,
+            )
+        }
     }
 
     fun startNewPush() {
@@ -608,6 +700,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(
                 screen = Screen.DASHBOARD,
+                step = WizardStep.SOURCE,
                 sourceType = null,
                 sourceName = "",
                 totalZipFiles = 0,
@@ -636,6 +729,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update {
             it.copy(
                 screen = Screen.DASHBOARD,
+                step = WizardStep.SOURCE,
                 repoUrlInput = url,
                 banner = "Loaded ${item.repoOwner}/${item.repoName} — pick a source to push again.",
                 syncError = null,

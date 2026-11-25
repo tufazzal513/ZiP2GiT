@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
@@ -82,6 +83,7 @@ import com.zip2git.data.model.RepoSummary
 import com.zip2git.data.model.SourceType
 import com.zip2git.data.model.SyncErrorInfo
 import com.zip2git.ui.MainUiState
+import com.zip2git.ui.WizardStep
 import com.zip2git.ui.components.ChangeColors
 import com.zip2git.ui.components.CountPill
 import com.zip2git.ui.components.MessageBanner
@@ -89,15 +91,10 @@ import com.zip2git.ui.components.SectionCard
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
 /**
- * The single scrollable "New Git Push" form, laid out like the original app:
- *
- *  Target Repository → GitHub Authentication → Branch & Commit Details →
- *  Project Files → Advanced Options → Inspect Changes & Validate → change review.
- *
- * Everything lives on one page so the token, branch and file selection can be
- * checked together before a push.
+ * Host of the five in-form wizard pages (steps 1-5) and the history page
+ * (step 8). The app bar, the "Step n of 8" header and the Back / Next footer are
+ * shared, so each page only supplies its own body.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,24 +130,43 @@ fun DashboardScreen(
     onAddFilterRule: (String) -> Unit,
     onRemoveFilterRule: (String) -> Unit,
     onToggleFilterRule: (String) -> Unit,
+    onBack: () -> Unit,
+    onNext: () -> Unit,
+    onGoToStep: (WizardStep) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showAbout by remember { mutableStateOf(false) }
+    val step = state.step
 
     Scaffold(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
+                    }
+                },
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            text = "New Git Push",
-                            style = MaterialTheme.typography.headlineSmall,
-                        )
+                        Column {
+                            Text(
+                                text = "New Git Push",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                text = step.title,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         if (state.connectedLogin.isNotBlank()) {
                             Surface(
                                 shape = RoundedCornerShape(50),
@@ -199,6 +215,8 @@ fun DashboardScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            item { WizardProgressHeader(step = step) }
+
             state.banner?.let { banner ->
                 item {
                     MessageBanner(
@@ -218,104 +236,266 @@ fun DashboardScreen(
                 item { AboutCard(onClose = { showAbout = false }) }
             }
 
-            item {
-                TargetRepositoryCard(
-                    state = state,
-                    onSelectRepo = onSelectRepo,
-                    onRefreshRepos = onRefreshRepos,
-                    onRepoUrlChange = onRepoUrlChange,
-                )
-            }
-
-            item {
-                AuthenticationCard(
-                    state = state,
-                    onTokenChange = onTokenChange,
-                    onTestToken = onTestToken,
-                )
-            }
-
-            item {
-                BranchCommitCard(
-                    state = state,
-                    onBranchChange = onBranchChange,
-                    onRefreshBranches = onRefreshBranches,
-                    onCommitMessageChange = onCommitMessageChange,
-                )
-            }
-
-            item {
-                ProjectFilesCard(
-                    state = state,
-                    onPickZip = onPickZip,
-                    onPickFolder = onPickFolder,
-                    onPickFiles = onPickFiles,
-                    onClearSource = onClearSource,
-                )
-            }
-
-            item {
-                AdvancedOptionsCard(
-                    state = state,
-                    onToggle = onToggleAdvanced,
-                    onMirrorSyncChange = onMirrorSyncChange,
-                    onKeepImportantChange = onKeepImportantChange,
-                    onStripRootChange = onStripRootChange,
-                    onAddFilterRule = onAddFilterRule,
-                    onRemoveFilterRule = onRemoveFilterRule,
-                    onToggleFilterRule = onToggleFilterRule,
-                )
-            }
-
-            item {
-                InspectButton(
-                    state = state,
-                    onInspectChanges = onInspectChanges,
-                )
-            }
-
-            if (state.showReview) {
-                item {
-                    ReviewCard(
-                        comparison = state.comparison,
-                        progress = state.syncProgress,
-                        excludedPaths = state.excludedPaths,
-                        expandedPath = state.expandedPath,
-                        onRefresh = onRefreshComparison,
-                        onToggleExcluded = onTogglePathExcluded,
-                        onClearExcluded = onClearExcluded,
-                        onToggleExpanded = onToggleExpandedPath,
-                    )
-                }
-
-                item {
-                    CommitCard(
+            when (step) {
+                WizardStep.TOKEN -> item {
+                    AuthenticationCard(
                         state = state,
-                        onStartSync = onStartSync,
+                        onTokenChange = onTokenChange,
+                        onTestToken = onTestToken,
                     )
                 }
+
+                WizardStep.REPOSITORY -> {
+                    item {
+                        TargetRepositoryCard(
+                            state = state,
+                            onSelectRepo = onSelectRepo,
+                            onRefreshRepos = onRefreshRepos,
+                            onRepoUrlChange = onRepoUrlChange,
+                        )
+                    }
+                    item {
+                        BranchSelectionCard(
+                            state = state,
+                            onBranchChange = onBranchChange,
+                            onRefreshBranches = onRefreshBranches,
+                        )
+                    }
+                }
+
+                WizardStep.SOURCE -> {
+                    item {
+                        ProjectFilesCard(
+                            state = state,
+                            onPickZip = onPickZip,
+                            onPickFolder = onPickFolder,
+                            onPickFiles = onPickFiles,
+                            onClearSource = onClearSource,
+                        )
+                    }
+                    item {
+                        AdvancedOptionsCard(
+                            state = state,
+                            onToggle = onToggleAdvanced,
+                            onMirrorSyncChange = onMirrorSyncChange,
+                            onKeepImportantChange = onKeepImportantChange,
+                            onStripRootChange = onStripRootChange,
+                            onAddFilterRule = onAddFilterRule,
+                            onRemoveFilterRule = onRemoveFilterRule,
+                            onToggleFilterRule = onToggleFilterRule,
+                        )
+                    }
+                }
+
+                WizardStep.REVIEW -> {
+                    item {
+                        ReviewCard(
+                            comparison = state.comparison,
+                            progress = state.syncProgress,
+                            excludedPaths = state.excludedPaths,
+                            expandedPath = state.expandedPath,
+                            onRefresh = onRefreshComparison,
+                            onToggleExcluded = onTogglePathExcluded,
+                            onClearExcluded = onClearExcluded,
+                            onToggleExpanded = onToggleExpandedPath,
+                        )
+                    }
+                    item {
+                        InspectButton(state = state, onInspectChanges = onInspectChanges)
+                    }
+                }
+
+                WizardStep.COMMIT -> {
+                    item {
+                        CommitSummaryCard(state = state)
+                    }
+                    item {
+                        CommitMessageCard(
+                            state = state,
+                            onCommitMessageChange = onCommitMessageChange,
+                        )
+                    }
+                    item { CommitCard(state = state, onStartSync = onStartSync) }
+                }
+
+                WizardStep.HISTORY -> {
+                    if (state.recentPushes.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "Recently completed work:",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onBackground,
+                            )
+                        }
+                        items(
+                            state.recentPushes,
+                            key = { it.repoOwner + it.repoName + it.branch + it.timestamp },
+                        ) {
+                            RecentPushRow(item = it, onClick = { onOpenRecent(it) })
+                        }
+                    } else {
+                        item {
+                            SectionCard(title = "Push History", subtitle = "No pushes yet") {
+                                Text(
+                                    text = "Successful pushes appear here so you can repeat " +
+                                        "them without re-entering the repository.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    item {
+                        SectionCard(
+                            title = "Jump to a step",
+                            subtitle = "Everything up to Commit & Push can be edited again",
+                        ) {
+                            WizardStepList(
+                                current = state.step,
+                                onSelect = onGoToStep,
+                                highestReachable = WizardStep.COMMIT,
+                            )
+                        }
+                    }
+                }
+
+                // Progress and result have their own full screens.
+                WizardStep.PROGRESS, WizardStep.RESULT -> Unit
             }
 
-            if (state.recentPushes.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "Recently completed work:",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
-                items(state.recentPushes, key = { it.repoOwner + it.repoName + it.branch + it.timestamp }) {
-                    RecentPushRow(item = it, onClick = { onOpenRecent(it) })
-                }
+            item {
+                WizardFooterHost(
+                    state = state,
+                    onBack = onBack,
+                    onNext = onNext,
+                )
             }
         }
     }
 }
 
+/**
+ * Chooses the right footer for the current page. The wizard footer is omitted on
+ * Progress (owned by [SyncScreen]) and Result (owned by [ResultScreen]).
+ */
+@Composable
+private fun WizardFooterHost(
+    state: MainUiState,
+    onBack: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val step = state.step
+    when (step) {
+        WizardStep.TOKEN -> WizardFooter(
+            step = step,
+            canContinue = state.connectedLogin.isNotBlank(),
+            onBack = onBack,
+            onNext = onNext,
+            hint = "Connect your GitHub token to continue.",
+        )
+
+        WizardStep.REPOSITORY -> WizardFooter(
+            step = step,
+            canContinue = state.repo != null && state.selectedBranch.isNotBlank(),
+            onBack = onBack,
+            onNext = onNext,
+            hint = "Choose a repository and a branch to continue.",
+        )
+
+        WizardStep.SOURCE -> WizardFooter(
+            step = step,
+            canContinue = state.sourceName.isNotBlank() && !state.isProcessingZip,
+            onBack = onBack,
+            onNext = onNext,
+            hint = "Pick a ZIP, folder, or files to continue.",
+        )
+
+        WizardStep.REVIEW -> WizardFooter(
+            step = step,
+            canContinue = state.comparison != null,
+            onBack = onBack,
+            onNext = onNext,
+            nextLabel = "Continue to Commit",
+            hint = "Run the comparison above so the diff is up to date.",
+        )
+
+        WizardStep.COMMIT -> WizardFooter(
+            step = step,
+            canContinue = state.sourceName.isNotBlank() && !state.isSyncing,
+            onBack = onBack,
+            onNext = onNext,
+            nextLabel = "Push to GitHub",
+            hint = "Pick a project source first.",
+        )
+
+        WizardStep.HISTORY -> WizardFooter(
+            step = step,
+            canContinue = true,
+            onBack = onBack,
+            onNext = onNext,
+            nextLabel = "Start a new push",
+        )
+
+        WizardStep.PROGRESS, WizardStep.RESULT -> Unit
+    }
+}
+
+/** Read-only recap of what the push will do, shown on the Commit page. */
+@Composable
+private fun CommitSummaryCard(state: MainUiState) {
+    SectionCard(title = "Ready to push", subtitle = "Check the details before uploading") {
+        SummaryRow("Repository", "${state.repo?.owner}/${state.repo?.name}")
+        SummaryRow("Branch", state.selectedBranch)
+        SummaryRow(
+            "Source",
+            if (state.sourceName.isBlank()) {
+                "None selected"
+            } else {
+                "${state.sourceName} • ${state.totalZipFiles} files"
+            },
+        )
+        SummaryRow(
+            "Changes",
+            state.comparison?.let {
+                "${it.added.size} added, ${it.modified.size} modified, " +
+                    "${it.deleted.size} deleted"
+            } ?: "Not compared yet",
+        )
+        if (state.excludedPaths.isNotEmpty()) {
+            SummaryRow("Skipped", "${state.excludedPaths.size} file(s)")
+        }
+        if (state.mirrorSync) {
+            SummaryRow("Mode", "Mirror sync (exact match)")
+        }
+    }
+}
+
+@Composable
+private fun SummaryRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(86.dp),
+        )
+        Text(
+            text = value.ifBlank { "—" },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TargetRepositoryCard(
+internal fun TargetRepositoryCard(
     state: MainUiState,
     onSelectRepo: (RepoSummary) -> Unit,
     onRefreshRepos: () -> Unit,
@@ -406,7 +586,7 @@ private fun TargetRepositoryCard(
 }
 
 @Composable
-private fun AuthenticationCard(
+internal fun AuthenticationCard(
     state: MainUiState,
     onTokenChange: (String) -> Unit,
     onTestToken: () -> Unit,
@@ -521,18 +701,59 @@ private fun AuthenticationCard(
                 color = MaterialTheme.colorScheme.primary,
             )
         }
+
+        Spacer(Modifier.height(10.dp))
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                Text(
+                    text = "Which token do I need?",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "•  Classic token: enable the repo scope.\n" +
+                        "•  Fine-grained token: give the target repository " +
+                        "Contents → Read and write.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Keep the token private — never paste it into a public repo, " +
+                        "screenshot or chat.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BranchCommitCard(
+internal fun BranchSelectionCard(
     state: MainUiState,
     onBranchChange: (String) -> Unit,
     onRefreshBranches: () -> Unit,
-    onCommitMessageChange: (String) -> Unit,
 ) {
-    SectionCard(title = "Branch & Commit Details") {
+    SectionCard(
+        title = "Branch",
+        subtitle = "Pick an existing branch or type a new name to create one",
+        trailing = {
+            IconButton(onClick = onRefreshBranches, enabled = !state.isFetchingBranches) {
+                if (state.isFetchingBranches) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Fetch branches")
+                }
+            }
+        },
+    ) {
         OutlinedTextField(
             value = state.selectedBranch,
             onValueChange = onBranchChange,
@@ -541,15 +762,6 @@ private fun BranchCommitCard(
             placeholder = { Text("main") },
             singleLine = true,
             enabled = !state.isSyncing,
-            trailingIcon = {
-                IconButton(onClick = onRefreshBranches, enabled = !state.isFetchingBranches) {
-                    if (state.isFetchingBranches) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Fetch branches")
-                    }
-                }
-            },
             shape = RoundedCornerShape(14.dp),
         )
 
@@ -579,8 +791,28 @@ private fun BranchCommitCard(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        if (state.repoBranches.isNotEmpty() &&
+            state.repoBranches.none { it.name == state.selectedBranch }
+        ) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Creating branch \"${state.selectedBranch}\" — it does not exist yet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
 
+@Composable
+internal fun CommitMessageCard(
+    state: MainUiState,
+    onCommitMessageChange: (String) -> Unit,
+) {
+    SectionCard(
+        title = "Commit Message",
+        subtitle = "This text becomes the Git commit description",
+    ) {
         OutlinedTextField(
             value = state.commitMessage,
             onValueChange = onCommitMessageChange,
@@ -592,16 +824,12 @@ private fun BranchCommitCard(
             shape = RoundedCornerShape(14.dp),
         )
 
-        if (state.repoBranches.isNotEmpty() &&
-            state.repoBranches.none { it.name == state.selectedBranch }
-        ) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Branch \"${state.selectedBranch}\" does not exist yet — it will be created.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "Examples: \"Initial project upload\", \"Update frontend UI\", \"Fix login bug\"",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -632,7 +860,7 @@ private fun BranchChip(name: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ProjectFilesCard(
+internal fun ProjectFilesCard(
     state: MainUiState,
     onPickZip: () -> Unit,
     onPickFolder: () -> Unit,
@@ -747,7 +975,7 @@ private fun ProjectFilesCard(
 }
 
 @Composable
-private fun PickButton(
+internal fun PickButton(
     text: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     enabled: Boolean,
@@ -796,7 +1024,7 @@ private fun PickButton(
 }
 
 /** Renders a byte count the way the original app does: "6.1 MB", "12 files". */
-private fun formatBytes(bytes: Long): String {
+internal fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0 B"
     val units = listOf("B", "KB", "MB", "GB")
     var value = bytes.toDouble()
@@ -814,7 +1042,7 @@ private fun formatBytes(bytes: Long): String {
 }
 
 @Composable
-private fun AdvancedOptionsCard(
+internal fun AdvancedOptionsCard(
     state: MainUiState,
     onToggle: () -> Unit,
     onMirrorSyncChange: (Boolean) -> Unit,
@@ -948,7 +1176,7 @@ private fun AdvancedOptionsCard(
 }
 
 @Composable
-private fun OptionSwitch(
+internal fun OptionSwitch(
     title: String,
     detail: String,
     checked: Boolean,
@@ -972,7 +1200,7 @@ private fun OptionSwitch(
 }
 
 @Composable
-private fun AddRuleRow(onAdd: (String) -> Unit) {
+internal fun AddRuleRow(onAdd: (String) -> Unit) {
     var input by remember { mutableStateOf("") }
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1003,7 +1231,7 @@ private fun AddRuleRow(onAdd: (String) -> Unit) {
 }
 
 @Composable
-private fun InspectButton(state: MainUiState, onInspectChanges: () -> Unit) {
+internal fun InspectButton(state: MainUiState, onInspectChanges: () -> Unit) {
     val enabled = state.sourceName.isNotBlank() &&
         state.selectedBranch.isNotBlank() &&
         !state.isProcessingZip
@@ -1026,7 +1254,7 @@ private fun InspectButton(state: MainUiState, onInspectChanges: () -> Unit) {
 }
 
 @Composable
-private fun ReviewCard(
+internal fun ReviewCard(
     comparison: FileComparison?,
     progress: com.zip2git.data.model.SyncProgress?,
     excludedPaths: Set<String>,
@@ -1121,13 +1349,14 @@ private fun ReviewCard(
  * The comparison list is derived here rather than in the model so the composable
  * stays readable; [com.zip2git.domain.DiffEngine.toChangeList] does the work.
  */
-private object DiffEngineChanges {
+/** `ExperimentalMaterial3Api` is shared with the wizard pages that embed the cards. */
+internal object DiffEngineChanges {
     fun of(comparison: FileComparison) =
         com.zip2git.domain.DiffEngine.toChangeList(comparison)
 }
 
 @Composable
-private fun FileChangeRow(
+internal fun FileChangeRow(
     change: com.zip2git.data.model.FileChange,
     excluded: Boolean,
     expanded: Boolean,
@@ -1207,7 +1436,7 @@ private fun FileChangeRow(
 }
 
 @Composable
-private fun CommitCard(
+internal fun CommitCard(
     state: MainUiState,
     onStartSync: () -> Unit,
 ) {
@@ -1244,7 +1473,7 @@ private fun CommitCard(
 }
 
 @Composable
-private fun AboutCard(onClose: () -> Unit) {
+internal fun AboutCard(onClose: () -> Unit) {
     SectionCard(
         title = "About Zip2Git",
         subtitle = "Sync project files via Zip2Git",
@@ -1316,7 +1545,7 @@ private fun ErrorCard(error: SyncErrorInfo, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun RecentPushRow(item: RecentPushItem, onClick: () -> Unit) {
+internal fun RecentPushRow(item: RecentPushItem, onClick: () -> Unit) {
     val formatter = remember { SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()) }
 
     Surface(

@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.zip2git.ui.MainViewModel
 import com.zip2git.ui.Screen
+import com.zip2git.ui.WizardStep
 import com.zip2git.ui.screens.DashboardScreen
 import com.zip2git.ui.screens.ResultScreen
 import com.zip2git.ui.screens.SetupScreen
@@ -120,6 +121,9 @@ class MainActivity : ComponentActivity() {
                             onAddFilterRule = viewModel::addFilterRule,
                             onRemoveFilterRule = viewModel::removeFilterRule,
                             onToggleFilterRule = viewModel::toggleFilterRule,
+                            onBack = viewModel::previousStep,
+                            onNext = viewModel::nextStep,
+                            onGoToStep = viewModel::goToStep,
                         )
 
                         Screen.SYNC -> SyncScreen(
@@ -131,6 +135,7 @@ class MainActivity : ComponentActivity() {
                             state = state,
                             onSyncAnother = viewModel::startNewPush,
                             onBackToDashboard = viewModel::goToDashboard,
+                            onViewHistory = { viewModel.goToStep(WizardStep.HISTORY) },
                         )
                     }
                 }

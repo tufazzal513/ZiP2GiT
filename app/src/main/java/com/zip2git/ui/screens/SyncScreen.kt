@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,9 +34,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import com.zip2git.data.model.SyncProgress
 import com.zip2git.data.model.SyncStep
 import com.zip2git.ui.MainUiState
+import com.zip2git.ui.WizardStep
 
 /**
  * Live progress while the Git Data API work runs: blobs, tree, commit, ref.
@@ -73,6 +77,12 @@ fun SyncScreen(
             .padding(horizontal = 20.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Spacer(Modifier.height(14.dp))
+
+        WizardProgressHeader(step = WizardStep.PROGRESS)
+
+        Spacer(Modifier.height(18.dp))
+
         Box(
             modifier = Modifier
                 .size(92.dp)
@@ -207,12 +217,13 @@ private fun StepRow(label: String, done: Boolean, active: Boolean, detail: Strin
     }
 }
 
-/** Success screen shown after a completed push. */
+/** Success screen shown after a completed push. This is wizard page 7. */
 @Composable
 fun ResultScreen(
     state: MainUiState,
     onSyncAnother: () -> Unit,
     onBackToDashboard: () -> Unit,
+    onViewHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val result = state.syncResult
@@ -223,9 +234,14 @@ fun ResultScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        WizardProgressHeader(step = WizardStep.RESULT)
+
+        Spacer(Modifier.height(20.dp))
+
         Box(
             modifier = Modifier
                 .size(96.dp)
@@ -341,6 +357,15 @@ fun ResultScreen(
             shape = RoundedCornerShape(14.dp),
         ) {
             Text("Back to Dashboard")
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        TextButton(
+            onClick = onViewHistory,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Continue to Push History →")
         }
     }
 }

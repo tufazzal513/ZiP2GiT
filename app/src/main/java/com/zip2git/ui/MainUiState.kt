@@ -15,12 +15,69 @@ import com.zip2git.data.model.SyncResult
 enum class Screen { SETUP, DASHBOARD, SYNC, RESULT }
 
 /**
+ * The eight workflow steps the app walks through, in the order the Play Store
+ * listing describes them. Steps 1-5 and 8 render inside [Screen.DASHBOARD];
+ * step 6 is [Screen.SYNC] and step 7 is [Screen.RESULT].
+ */
+enum class WizardStep(val number: Int, val title: String, val subtitle: String) {
+    TOKEN(
+        1,
+        "GitHub Token Connect",
+        "Authorise Zip2Git with a Personal Access Token",
+    ),
+    REPOSITORY(
+        2,
+        "Repository & Branch",
+        "Choose where the files will be pushed",
+    ),
+    SOURCE(
+        3,
+        "Select Source",
+        "Pick a ZIP, project folder, or individual files",
+    ),
+    REVIEW(
+        4,
+        "File Tree & Diff Review",
+        "Check what will be added, modified or deleted",
+    ),
+    COMMIT(
+        5,
+        "Commit & Push",
+        "Describe the change and start the upload",
+    ),
+    PROGRESS(
+        6,
+        "Upload Progress",
+        "Watch each Git Data API step complete",
+    ),
+    RESULT(
+        7,
+        "Push Result",
+        "Confirm what reached GitHub",
+    ),
+    HISTORY(
+        8,
+        "Push History",
+        "Review earlier pushes and push again",
+    );
+
+    companion object {
+        const val TOTAL = 8
+
+        /** Enum entries via `values()` to stay warning-free on Kotlin 1.9. */
+        val ordered: List<WizardStep> = values().toList()
+    }
+}
+
+/**
  * A hand-written state holder instead of a dataclass per screen. Boolean flags
  * mirror the original `isValidatingToken`, `isFetchingBranches`, `isProcessingZip`
  * etc. so the UI can show the same spinners.
  */
 data class MainUiState(
     val screen: Screen = Screen.SETUP,
+    /** Which of the eight workflow pages is showing. */
+    val step: WizardStep = WizardStep.TOKEN,
     val darkTheme: Boolean = false,
 
     // Setup / credentials
