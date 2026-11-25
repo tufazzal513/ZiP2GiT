@@ -93,7 +93,6 @@ class MainActivity : ComponentActivity() {
                             state = state,
                             onStartNewPush = viewModel::openPushForm,
                             onOpenRecent = viewModel::openRecent,
-                            onDisconnect = viewModel::disconnect,
                             onToggleTheme = viewModel::toggleDarkTheme,
                             onDismissBanner = viewModel::dismissBanner,
                         )
@@ -105,6 +104,7 @@ class MainActivity : ComponentActivity() {
                             onSelectRepo = viewModel::selectRepoFromList,
                             onRefreshRepos = viewModel::loadUserRepos,
                             onRepoUrlChange = viewModel::onRepoUrlChange,
+                            onTargetFolderChange = viewModel::onTargetFolderChange,
                             onPickZip = { pickZip.launch(ZIP_MIME_TYPES) },
                             onPickFolder = { pickFolder.launch(null) },
                             onPickFiles = { pickFiles.launch(arrayOf("*/*")) },
@@ -117,7 +117,6 @@ class MainActivity : ComponentActivity() {
                             onRefreshComparison = viewModel::refreshComparison,
                             onTogglePathExcluded = viewModel::togglePathExcluded,
                             onClearExcluded = viewModel::clearExcludedPaths,
-                            onToggleExpandedPath = viewModel::toggleExpandedPath,
                             onStartSync = viewModel::startSync,
                             onToggleTheme = viewModel::toggleDarkTheme,
                             onDismissBanner = viewModel::dismissBanner,

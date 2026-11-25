@@ -162,6 +162,13 @@ data class CompareOptions(
      * kept on the remote even when Mirror Sync would otherwise delete them.
      */
     val keepImportantFiles: Boolean = true,
+    /**
+     * Optional repository-relative folder the upload is nested under, e.g.
+     * `android` pushes `main.go` as `android/main.go`. Blank means the repo root.
+     * Mirror Sync only considers existing remote files under this prefix, so the
+     * rest of the repository is never touched.
+     */
+    val pathPrefix: String = "",
 )
 
 /** Request payload for a sync run. */

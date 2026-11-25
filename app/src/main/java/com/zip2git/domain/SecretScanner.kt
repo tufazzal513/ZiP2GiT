@@ -67,11 +67,21 @@ object SecretScanner {
     /** Names that, anywhere in the filename, hint at a secret. */
     private val SENSITIVE_HINTS = listOf("secret", "credential", "apikey", "api_key")
 
+    /**
+     * `.env` suffixes that are safe templates, not secrets. They are committed
+     * by every real project (`.env.example` ships in the repo on purpose), so
+     * they must never be held back.
+     */
+    private val SAFE_ENV_SUFFIXES = setOf("example", "sample", "template", "dist")
+
     /** True when [path] looks like it should not be committed. */
     fun isSensitive(path: String): Boolean {
         val name = path.substringAfterLast('/').lowercase()
         if (name.isBlank()) return false
-        if (name == ".env" || name.startsWith(".env.")) return true
+        if (name == ".env" || name.startsWith(".env.")) {
+            val suffix = name.removePrefix(".env.").substringBefore('.')
+            return suffix !in SAFE_ENV_SUFFIXES
+        }
         if (SENSITIVE_NAMES.contains(name)) return true
         val ext = name.substringAfterLast('.', "")
         if (ext.isNotEmpty() && SENSITIVE_EXTENSIONS.contains(ext)) return true

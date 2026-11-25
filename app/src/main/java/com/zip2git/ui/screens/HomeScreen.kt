@@ -16,14 +16,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,7 +50,6 @@ import androidx.compose.ui.unit.dp
 import com.zip2git.data.model.RecentPushItem
 import com.zip2git.ui.MainUiState
 import com.zip2git.ui.components.SectionCard
-import com.zip2git.ui.theme.HeroIndigo
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -57,8 +58,8 @@ import java.util.Locale
  * The home page that sits behind the back arrow of the `New Git Push` form.
  *
  * The original app keeps the push form (repository, token, branch, files,
- * options, review, push) on its own page; completed work belongs here instead of
- * at the bottom of that form.
+ * options, review, push) on its own page; this page is only the entry point:
+ * a hero card, the "How Zip2Git Works" walkthrough, and the completed-push list.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +67,6 @@ fun HomeScreen(
     state: MainUiState,
     onStartNewPush: () -> Unit,
     onOpenRecent: (RecentPushItem) -> Unit,
-    onDisconnect: () -> Unit,
     onToggleTheme: () -> Unit,
     onDismissBanner: () -> Unit,
     modifier: Modifier = Modifier,
@@ -79,21 +79,13 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            text = "Zip2Git",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (state.connectedLogin.isNotBlank()) {
-                            ConnectedPill(login = state.connectedLogin)
-                        }
-                    }
+                    Text(
+                        text = "Zip2Git",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 },
                 actions = {
                     IconButton(onClick = onToggleTheme) {
@@ -113,12 +105,6 @@ fun HomeScreen(
                     IconButton(onClick = { showAbout = !showAbout }) {
                         Icon(Icons.Filled.Info, contentDescription = "About Zip2Git")
                     }
-                    IconButton(onClick = onDisconnect) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = "Disconnect and remove the saved token",
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -136,11 +122,18 @@ fun HomeScreen(
         ) {
             state.banner?.let { banner ->
                 item {
-                    MessageBannerRow(text = banner, onDismiss = onDismissBanner)
+                    com.zip2git.ui.components.MessageBanner(
+                        title = "Notice",
+                        message = banner,
+                        isError = false,
+                        onDismiss = onDismissBanner,
+                    )
                 }
             }
 
             item { HeroCard(onStartNewPush = onStartNewPush) }
+
+            item { HowItWorksCard() }
 
             if (showAbout) {
                 item { AboutCard(onClose = { showAbout = false }) }
@@ -178,24 +171,27 @@ fun HomeScreen(
     }
 }
 
+/** Gradient hero with the headline, blurb and the primary "Start New Push" action. */
 @Composable
 private fun HeroCard(onStartNewPush: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 1.dp,
+        color = Color.Transparent,
     ) {
-        Column(Modifier.padding(18.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(listOf(Color(0xFF1E3FA8), Color(0xFF2F6BFF))),
+                    RoundedCornerShape(18.dp),
+                )
+                .padding(20.dp),
+        ) {
             Box(
                 modifier = Modifier
                     .size(52.dp)
-                    .background(
-                        brush = Brush.linearGradient(
-                            listOf(MaterialTheme.colorScheme.primary, HeroIndigo),
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                    ),
+                    .background(Color.White.copy(alpha = 0.18f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -209,16 +205,25 @@ private fun HeroCard(onStartNewPush: () -> Unit) {
             Spacer(Modifier.height(14.dp))
 
             Text(
-                text = "Push a project to GitHub without a laptop",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                text = "Direct GitHub Push",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "Upload code without PC or Git CLI",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.9f),
+            )
+
+            Spacer(Modifier.height(10.dp))
+
             Text(
                 text = "Upload ZIP archives, project folders, or selected files straight " +
                     "to your GitHub repository in seconds with automatic Git diff comparison.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.85f),
             )
 
             Spacer(Modifier.height(16.dp))
@@ -228,7 +233,11 @@ private fun HeroCard(onStartNewPush: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
-                shape = RoundedCornerShape(50),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4E86FF),
+                    contentColor = Color.White,
+                ),
             ) {
                 Icon(
                     imageVector = Icons.Filled.CloudUpload,
@@ -237,8 +246,64 @@ private fun HeroCard(onStartNewPush: () -> Unit) {
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Start New Push", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
+    }
+}
+
+/** The three-step "How Zip2Git Works" walkthrough under the hero. */
+@Composable
+private fun HowItWorksCard() {
+    SectionCard(title = "\uD83D\uDCA1 How Zip2Git Works") {
+        HowItWorksStep(
+            number = "1",
+            text = "Enter your GitHub Repository URL & Personal Access Token (PAT).",
+        )
+        Spacer(Modifier.height(12.dp))
+        HowItWorksStep(
+            number = "2",
+            text = "Pick any ZIP archive, whole project folder, or code files from your device.",
+        )
+        Spacer(Modifier.height(12.dp))
+        HowItWorksStep(
+            number = "3",
+            text = "Inspect local vs remote changes and push commits in one tap.",
+        )
+    }
+}
+
+@Composable
+private fun HowItWorksStep(number: String, text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = number,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -303,14 +368,4 @@ internal fun RecentPushRow(item: RecentPushItem, onClick: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-private fun MessageBannerRow(text: String, onDismiss: () -> Unit) {
-    com.zip2git.ui.components.MessageBanner(
-        title = "Notice",
-        message = text,
-        isError = false,
-        onDismiss = onDismiss,
-    )
 }

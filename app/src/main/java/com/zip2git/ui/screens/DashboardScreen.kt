@@ -23,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
@@ -89,8 +88,8 @@ import java.util.Locale
 /** Success green used by the connected badge and checkmark (original app). */
 internal val ConnectedGreen = Color(0xFF22C55E)
 
-/** The blue banner behind the "Connected as @..." line. */
-internal val ConnectedBlue = Color(0xFF1D4ED8)
+/** The deep blue banner behind the "Connected as @..." line (original app). */
+internal val ConnectedBlue = Color(0xFF0B3FB5)
 /**
  * The single scrolling "New Git Push" form, matching the original app: one card
  * for repository + token + branch + commit message, then the project files card,
@@ -106,6 +105,7 @@ fun DashboardScreen(
     onSelectRepo: (RepoSummary) -> Unit,
     onRefreshRepos: () -> Unit,
     onRepoUrlChange: (String) -> Unit,
+    onTargetFolderChange: (String) -> Unit,
     onPickZip: () -> Unit,
     onPickFolder: () -> Unit,
     onPickFiles: () -> Unit,
@@ -118,7 +118,6 @@ fun DashboardScreen(
     onRefreshComparison: () -> Unit,
     onTogglePathExcluded: (String) -> Unit,
     onClearExcluded: () -> Unit,
-    onToggleExpandedPath: (String) -> Unit,
     onStartSync: () -> Unit,
     onToggleTheme: () -> Unit,
     onDismissBanner: () -> Unit,
@@ -222,6 +221,7 @@ fun DashboardScreen(
                     onSelectRepo = onSelectRepo,
                     onRefreshRepos = onRefreshRepos,
                     onRepoUrlChange = onRepoUrlChange,
+                    onTargetFolderChange = onTargetFolderChange,
                 )
             }
 
@@ -278,7 +278,7 @@ fun DashboardScreen(
             // 6. Inspect Changes & Validate
             item { InspectButton(state = state, onInspectChanges = onInspectChanges) }
 
-            // 7. Change review, revealed after inspecting.
+            // 7. Change Summary, revealed after inspecting; hosts the push action.
             if (state.comparison != null ||
                 (state.showReview && state.syncProgress == null && !state.isProcessingZip)
             ) {
@@ -288,17 +288,14 @@ fun DashboardScreen(
                         progress = state.syncProgress,
                         excludedPaths = state.excludedPaths,
                         secretPaths = state.secretPaths,
-                        expandedPath = state.expandedPath,
                         onRefresh = onRefreshComparison,
                         onToggleExcluded = onTogglePathExcluded,
                         onClearExcluded = onClearExcluded,
-                        onToggleExpanded = onToggleExpandedPath,
+                        onStartSync = onStartSync,
+                        isSyncing = state.isSyncing,
                     )
                 }
             }
-
-            // 8. Primary push action.
-            item { CommitCard(state = state, onStartSync = onStartSync) }
         }
     }
 }
@@ -331,97 +328,6 @@ private fun InlineProgressCard(state: MainUiState) {
     }
 }
 
-/** Read-only recap plus the primary "Push to GitHub" action. */
-@Composable
-internal fun CommitCard(
-    state: MainUiState,
-    onStartSync: () -> Unit,
-) {
-    val canSync = state.sourceName.isNotBlank() &&
-        state.repo != null &&
-        state.selectedBranch.isNotBlank() &&
-        !state.isSyncing &&
-        !state.isProcessingZip
-
-    SectionCard(title = "Ready to push", subtitle = "Check the details before uploading") {
-        SummaryRow("Repository", "${state.repo?.owner}/${state.repo?.name}")
-        SummaryRow("Branch", state.selectedBranch)
-        SummaryRow(
-            "Source",
-            if (state.sourceName.isBlank()) {
-                "None selected"
-            } else {
-                "${state.sourceName} • ${state.totalZipFiles} files"
-            },
-        )
-        SummaryRow(
-            "Changes",
-            state.comparison?.let {
-                "${it.added.size} added, ${it.modified.size} modified, " +
-                    "${it.deleted.size} deleted"
-            } ?: "Not compared yet — tap Inspect Changes & Validate",
-        )
-        val skipped = state.excludedPaths.size +
-            if (state.hideSecrets) state.secretPaths.size else 0
-        if (skipped > 0) {
-            SummaryRow("Skipped", "$skipped file(s)")
-        }
-        if (state.mirrorSync) {
-            SummaryRow("Mode", "Mirror sync (exact match)")
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        Button(
-            onClick = onStartSync,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            enabled = canSync,
-            shape = RoundedCornerShape(50),
-        ) {
-            Icon(Icons.Filled.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (state.isSyncing) "Uploading files..." else "Push to GitHub",
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-
-        if (!canSync) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Pick a repository, a branch, and a project source first.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SummaryRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(86.dp),
-        )
-        Text(
-            text = value.ifBlank { "—" },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TargetRepositoryCard(
@@ -429,6 +335,7 @@ internal fun TargetRepositoryCard(
     onSelectRepo: (RepoSummary) -> Unit,
     onRefreshRepos: () -> Unit,
     onRepoUrlChange: (String) -> Unit,
+    onTargetFolderChange: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val repos = state.availableRepos
@@ -502,6 +409,19 @@ internal fun TargetRepositoryCard(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("GitHub Repository URL") },
             placeholder = { Text("https://github.com/owner/repository") },
+            singleLine = true,
+            enabled = !state.isInitializingRepo,
+            shape = RoundedCornerShape(14.dp),
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = state.targetFolder,
+            onValueChange = onTargetFolderChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Target folder in repo (optional)") },
+            placeholder = { Text("e.g. android  (uploads land in android/)") },
             singleLine = true,
             enabled = !state.isInitializingRepo,
             shape = RoundedCornerShape(14.dp),
@@ -629,36 +549,6 @@ internal fun AuthenticationCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
             )
-        }
-
-        Spacer(Modifier.height(10.dp))
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-        ) {
-            Column(Modifier.padding(12.dp)) {
-                Text(
-                    text = "Which token do I need?",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "•  Classic token: enable the repo scope.\n" +
-                        "•  Fine-grained token: give the target repository " +
-                        "Contents → Read and write.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Keep the token private — never paste it into a public repo, " +
-                        "screenshot or chat.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
         }
     }
 }
@@ -970,18 +860,6 @@ internal fun AdvancedOptionsCard(
 ) {
     SectionCard(
         title = "Advanced Options",
-        trailing = {
-            IconButton(onClick = onToggle) {
-                Icon(
-                    imageVector = if (state.showAdvanced) {
-                        Icons.Filled.ExpandLess
-                    } else {
-                        Icons.Filled.ExpandMore
-                    },
-                    contentDescription = if (state.showAdvanced) "Collapse" else "Expand",
-                )
-            }
-        },
     ) {
         OptionSwitch(
             title = "Smart File Filter",
@@ -1013,8 +891,11 @@ internal fun AdvancedOptionsCard(
             onCheckedChange = onKeepImportantChange,
         )
 
+        Spacer(Modifier.height(10.dp))
+
+        // A secret-file detection hit is a safety signal, so the switch stays
+        // visible in the always-open part of the card.
         if (state.secretPaths.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
             OptionSwitch(
                 title = "Exclude secret files",
                 detail = "${state.secretPaths.size} credential-looking file(s) detected " +
@@ -1022,11 +903,10 @@ internal fun AdvancedOptionsCard(
                 checked = state.hideSecrets,
                 onCheckedChange = onHideSecretsChange,
             )
+            Spacer(Modifier.height(10.dp))
         }
 
-        if (state.showAdvanced) {
-            Spacer(Modifier.height(10.dp))
-
+        MoreOptionsSection(expanded = state.showAdvanced, onToggle = onToggle) {
             OptionSwitch(
                 title = "Strip root folder",
                 detail = "Remove the single top-level folder when importing a ZIP " +
@@ -1102,6 +982,43 @@ internal fun AdvancedOptionsCard(
     }
 }
 
+/**
+ * Reveals the secondary options (strip root folder, filter rules). The three
+ * primary switches above stay always-open; secrets stay visible too, so this only
+ * hides the rarely-touched extras.
+ */
+@Composable
+private fun MoreOptionsSection(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = "More options",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            contentDescription = if (expanded) "Collapse" else "Expand",
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
+    if (expanded) {
+        Spacer(Modifier.height(10.dp))
+        content()
+    }
+}
+
 @Composable
 internal fun OptionSwitch(
     title: String,
@@ -1159,9 +1076,14 @@ internal fun AddRuleRow(onAdd: (String) -> Unit) {
 
 @Composable
 internal fun InspectButton(state: MainUiState, onInspectChanges: () -> Unit) {
+    val isInspecting = state.syncProgress != null && !state.isSyncing
     val enabled = state.sourceName.isNotBlank() &&
         state.selectedBranch.isNotBlank() &&
-        !state.isProcessingZip
+        !state.isProcessingZip &&
+        !isInspecting
+    // The inline progress card already covers the first inspect (no comparison
+    // yet); the button only owns the spinner when re-inspecting an existing diff.
+    val showSpinner = isInspecting && state.comparison != null
 
     Button(
         onClick = onInspectChanges,
@@ -1171,7 +1093,15 @@ internal fun InspectButton(state: MainUiState, onInspectChanges: () -> Unit) {
         enabled = enabled,
         shape = RoundedCornerShape(50),
     ) {
-        Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(19.dp))
+        if (showSpinner) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(19.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(19.dp))
+        }
         Spacer(Modifier.width(9.dp))
         Text(
             text = "Inspect Changes & Validate",
@@ -1186,18 +1116,13 @@ internal fun ReviewCard(
     progress: com.zip2git.data.model.SyncProgress?,
     excludedPaths: Set<String>,
     secretPaths: List<String>,
-    expandedPath: String?,
     onRefresh: () -> Unit,
-    onToggleExcluded: (String) -> Unit,
     onClearExcluded: () -> Unit,
-    onToggleExpanded: (String) -> Unit,
+    onStartSync: (() -> Unit)?,
+    isSyncing: Boolean,
 ) {
     SectionCard(
-        title = "Inspect Changes & Validate",
-        subtitle = comparison?.let {
-            "${it.added.size + it.modified.size + it.deleted.size} changes, " +
-                "${it.unchanged.size} unchanged"
-        },
+        title = "Change Summary",
         trailing = {
             IconButton(onClick = onRefresh, enabled = comparison != null) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Recompare")
@@ -1224,13 +1149,21 @@ internal fun ReviewCard(
             return@SectionCard
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            CountPill("added", comparison.added.size, ChangeColors.Added)
-            CountPill("modified", comparison.modified.size, ChangeColors.Modified)
-            CountPill("deleted", comparison.deleted.size, ChangeColors.Deleted)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            CountPill("Added", comparison.added.size, ChangeColors.Added, sign = "+")
+            CountPill("Modified", comparison.modified.size, ChangeColors.Modified, sign = "~")
+            CountPill("Deleted", comparison.deleted.size, ChangeColors.Deleted, sign = "-")
+            Text(
+                text = "=${comparison.unchanged.size} Unchanged",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
-        val changes = DiffEngineChanges.of(comparison)
+        val changes = com.zip2git.domain.DiffEngine.toChangeList(comparison)
         if (changes.isEmpty()) {
             Spacer(Modifier.height(10.dp))
             Text(
@@ -1282,7 +1215,7 @@ internal fun ReviewCard(
         }
 
         if (excludedPaths.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1299,107 +1232,86 @@ internal fun ReviewCard(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(14.dp))
 
-        changes.forEach { change ->
-            FileChangeRow(
-                change = change,
-                excluded = excludedPaths.contains(change.path),
-                expanded = expandedPath == change.path,
-                onToggleExcluded = { onToggleExcluded(change.path) },
-                onToggleExpanded = { onToggleExpanded(change.path) },
+        // The original shows a plain path list and truncates it, so a large project
+        // never pushes the push button below the fold.
+        val visible = changes.take(MAX_VISIBLE_CHANGES)
+        visible.forEach { change ->
+            PlainChangeRow(change = change)
+        }
+        val hidden = changes.size - visible.size
+        if (hidden > 0) {
+            Text(
+                text = "+ $hidden more files...",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.padding(top = 6.dp),
             )
+        }
+
+        if (onStartSync != null) {
+            Spacer(Modifier.height(18.dp))
+            Button(
+                onClick = onStartSync,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                enabled = !isSyncing,
+                shape = RoundedCornerShape(50),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (isSyncing) {
+                        "Pushing to GitHub..."
+                    } else {
+                        "Push Commit (${changes.size} ${if (changes.size == 1) "change" else "changes"})"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
         }
     }
 }
 
-/**
- * The comparison list is derived here rather than in the model so the composable
- * stays readable; [com.zip2git.domain.DiffEngine.toChangeList] does the work.
- */
-/** `ExperimentalMaterial3Api` is shared with the wizard pages that embed the cards. */
-internal object DiffEngineChanges {
-    fun of(comparison: FileComparison) =
-        com.zip2git.domain.DiffEngine.toChangeList(comparison)
-}
+/** How many changed paths the Change Summary lists before truncating. */
+private const val MAX_VISIBLE_CHANGES = 12
 
+/** One plain change line: green `+`, amber `~`, or red `×` followed by the path. */
 @Composable
-internal fun FileChangeRow(
-    change: com.zip2git.data.model.FileChange,
-    excluded: Boolean,
-    expanded: Boolean,
-    onToggleExcluded: () -> Unit,
-    onToggleExpanded: () -> Unit,
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onToggleExpanded)
-                .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = ChangeColors.label(change.status),
-                style = MaterialTheme.typography.labelSmall,
-                color = ChangeColors.of(change.status),
-            )
-            Text(
-                text = change.path,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = if (excluded) {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = if (excluded) "SKIP" else "KEEP",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (excluded) {
-                    ChangeColors.Deleted
-                } else {
-                    ChangeColors.Added
-                },
-                modifier = Modifier
-                    .clickable(onClick = onToggleExcluded)
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-        }
-
-        if (expanded) {
-            val localLabel = when (change.status) {
-                ChangeStatus.DELETED -> "Selected local version of this file: absent"
-                ChangeStatus.ADDED -> "Selected local version of ${change.path}"
-                ChangeStatus.MODIFIED -> "Selected local version of ${change.path}"
-                ChangeStatus.UNCHANGED -> "Identical on both sides"
-            }
-            val remoteLabel = when (change.status) {
-                ChangeStatus.DELETED -> "Selected remote version of ${change.path}"
-                else -> "Selected remote version of ${change.path}"
-            }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, bottom = 6.dp),
-            ) {
-                Text(
-                    text = localLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = remoteLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+private fun PlainChangeRow(change: com.zip2git.data.model.FileChange) {
+    val (symbol, color) = when (change.status) {
+        ChangeStatus.ADDED -> "+" to ChangeColors.Added
+        ChangeStatus.MODIFIED -> "~" to ChangeColors.Modified
+        ChangeStatus.DELETED -> "\u00D7" to ChangeColors.Deleted
+        ChangeStatus.UNCHANGED -> "=" to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = symbol,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = color,
+        )
+        Text(
+            text = change.path,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 

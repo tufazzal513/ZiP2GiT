@@ -66,6 +66,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onRepoUrlChange(value: String) = _uiState.update { it.copy(repoUrlInput = value) }
 
+    fun onTargetFolderChange(value: String) = _uiState.update { it.copy(targetFolder = value) }
+
     fun onTokenChange(value: String) = _uiState.update { it.copy(tokenInput = value) }
 
     fun setHideSecrets(enabled: Boolean) = _uiState.update { it.copy(hideSecrets = enabled) }
@@ -524,6 +526,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         filterRules = _uiState.value.filterRules,
                         excludedPaths = effectiveExcludedPaths(_uiState.value),
                         keepImportantFiles = _uiState.value.keepImportantFiles,
+                        pathPrefix = _uiState.value.targetFolder,
                     ),
                 )
             }.onSuccess { comparison ->
@@ -572,6 +575,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         filterRules = state.filterRules,
                         excludedPaths = effectiveExcludedPaths(state),
                         keepImportantFiles = state.keepImportantFiles,
+                        pathPrefix = state.targetFolder,
                     ),
                     defaultBranch = details.defaultBranch,
                     isEmptyRepo = false,

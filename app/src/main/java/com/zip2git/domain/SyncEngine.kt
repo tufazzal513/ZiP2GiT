@@ -161,8 +161,14 @@ class SyncEngine(private val repo: GitHubRepository) {
             ),
         )
 
+        val prefix = options.pathPrefix.trim().trim('/')
+        // The comparison is done on prefixed paths, but a ProjectSource is keyed by
+        // its own (unprefixed) paths, so reads must strip the prefix back off.
+        fun displayPath(entryPath: String): String =
+            if (prefix.isEmpty()) entryPath else entryPath.removePrefix("$prefix/")
+
         toUpload.forEachIndexed { index, file ->
-            val bytes = source.open(file.path)
+            val bytes = source.open(displayPath(file.path))
             val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
             val blob = repo.createBlob(owner, repoName, encoded)
             blobShas[file.path] = blob.sha

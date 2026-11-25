@@ -81,6 +81,7 @@ fun CountPill(
     count: Int,
     color: Color,
     modifier: Modifier = Modifier,
+    sign: String = "",
 ) {
     Surface(
         modifier = modifier,
@@ -98,7 +99,7 @@ fun CountPill(
                     .background(color, CircleShape),
             )
             Text(
-                text = "$count $label",
+                text = "$sign$count $label",
                 style = MaterialTheme.typography.labelSmall,
                 color = color,
                 maxLines = 1,

@@ -51,6 +51,8 @@ data class MainUiState(
     val selectedBranch: String = "",
     /** Default matches the original form's placeholder text. */
     val commitMessage: String = "Sync project files via Zip2Git",
+    /** Optional repo subfolder the upload is nested under ("Target folder in repo"). */
+    val targetFolder: String = "",
 
     // Source selection
     val sourceType: SourceType? = null,

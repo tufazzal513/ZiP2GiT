@@ -79,9 +79,25 @@ object DiffEngine {
         remoteTree: List<GitHubTreeItem>,
         options: CompareOptions,
     ): FileComparison {
-        val filtered = applyFilters(localFiles, options.filterRules)
+        val prefix = options.pathPrefix.trim().trim('/')
+        // Local paths are re-rooted under the optional target folder. Uploading
+        // through the prefixed entry keeps the blob bytes (and sha) untouched.
+        val localSource = if (prefix.isEmpty()) {
+            localFiles
+        } else {
+            localFiles.map { entry -> entry.copy(path = "$prefix/${entry.path}") }
+        }
+
+        val filtered = applyFilters(localSource, options.filterRules)
             .filterNot { options.excludedPaths.contains(it.path) }
-        val remoteByPath = remoteTree.associateBy { it.path }
+        // With a target folder, only remote files *inside* that folder are
+        // candidates; the rest of the repository must not be mirrored or deleted.
+        val remoteSource = if (prefix.isEmpty()) {
+            remoteTree
+        } else {
+            remoteTree.filter { it.path == prefix || it.path.startsWith("$prefix/") }
+        }
+        val remoteByPath = remoteSource.associateBy { it.path }
         val localPaths = HashSet<String>(filtered.size)
 
         val added = ArrayList<ZipFileEntry>()
