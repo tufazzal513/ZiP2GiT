@@ -16,8 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.zip2git.ui.MainViewModel
 import com.zip2git.ui.Screen
-import com.zip2git.ui.WizardStep
 import com.zip2git.ui.screens.DashboardScreen
+import com.zip2git.ui.screens.HomeScreen
 import com.zip2git.ui.screens.ResultScreen
 import com.zip2git.ui.screens.SetupScreen
 import com.zip2git.ui.screens.SyncScreen
@@ -89,7 +89,16 @@ class MainActivity : ComponentActivity() {
                             onConnect = viewModel::connect,
                         )
 
-                        Screen.DASHBOARD -> DashboardScreen(
+                        Screen.DASHBOARD -> HomeScreen(
+                            state = state,
+                            onStartNewPush = viewModel::openPushForm,
+                            onOpenRecent = viewModel::openRecent,
+                            onDisconnect = viewModel::disconnect,
+                            onToggleTheme = viewModel::toggleDarkTheme,
+                            onDismissBanner = viewModel::dismissBanner,
+                        )
+
+                        Screen.DASHBOARD_PUSH -> DashboardScreen(
                             state = state,
                             onTokenChange = viewModel::onTokenChange,
                             onTestToken = viewModel::testTokenAndLoadRepos,
@@ -110,20 +119,17 @@ class MainActivity : ComponentActivity() {
                             onClearExcluded = viewModel::clearExcludedPaths,
                             onToggleExpandedPath = viewModel::toggleExpandedPath,
                             onStartSync = viewModel::startSync,
-                            onDisconnect = viewModel::disconnect,
                             onToggleTheme = viewModel::toggleDarkTheme,
                             onDismissBanner = viewModel::dismissBanner,
                             onDismissError = viewModel::dismissError,
-                            onOpenRecent = viewModel::openRecent,
                             onToggleAdvanced = viewModel::toggleAdvanced,
                             onKeepImportantChange = viewModel::setKeepImportantFiles,
                             onStripRootChange = viewModel::setStripRootFolder,
                             onAddFilterRule = viewModel::addFilterRule,
                             onRemoveFilterRule = viewModel::removeFilterRule,
                             onToggleFilterRule = viewModel::toggleFilterRule,
-                            onBack = viewModel::previousStep,
-                            onNext = viewModel::nextStep,
-                            onGoToStep = viewModel::goToStep,
+                            onHideSecretsChange = viewModel::setHideSecrets,
+                            onBack = viewModel::goToDashboard,
                         )
 
                         Screen.SYNC -> SyncScreen(
@@ -135,7 +141,6 @@ class MainActivity : ComponentActivity() {
                             state = state,
                             onSyncAnother = viewModel::startNewPush,
                             onBackToDashboard = viewModel::goToDashboard,
-                            onViewHistory = { viewModel.goToStep(WizardStep.HISTORY) },
                         )
                     }
                 }

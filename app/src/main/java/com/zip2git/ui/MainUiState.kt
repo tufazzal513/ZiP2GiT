@@ -11,63 +11,14 @@ import com.zip2git.data.model.SyncErrorInfo
 import com.zip2git.data.model.SyncProgress
 import com.zip2git.data.model.SyncResult
 
-/** Top-level screens driven by [MainViewModel]. */
-enum class Screen { SETUP, DASHBOARD, SYNC, RESULT }
-
 /**
- * The eight workflow steps the app walks through, in the order the Play Store
- * listing describes them. Steps 1-5 and 8 render inside [Screen.DASHBOARD];
- * step 6 is [Screen.SYNC] and step 7 is [Screen.RESULT].
+ * Top-level screens, mirroring the original app's page boundaries:
+ * [Screen.DASHBOARD] is the home page behind the back arrow (recent pushes),
+ * [Screen.DASHBOARD_PUSH] is the `New Git Push` form itself, [Screen.SYNC] the
+ * upload takeover and [Screen.RESULT] the outcome page.
+ * [Screen.SETUP] is only reached on a cold start before a token exists.
  */
-enum class WizardStep(val number: Int, val title: String, val subtitle: String) {
-    TOKEN(
-        1,
-        "GitHub Token Connect",
-        "Authorise Zip2Git with a Personal Access Token",
-    ),
-    REPOSITORY(
-        2,
-        "Repository & Branch",
-        "Choose where the files will be pushed",
-    ),
-    SOURCE(
-        3,
-        "Select Source",
-        "Pick a ZIP, project folder, or individual files",
-    ),
-    REVIEW(
-        4,
-        "File Tree & Diff Review",
-        "Check what will be added, modified or deleted",
-    ),
-    COMMIT(
-        5,
-        "Commit & Push",
-        "Describe the change and start the upload",
-    ),
-    PROGRESS(
-        6,
-        "Upload Progress",
-        "Watch each Git Data API step complete",
-    ),
-    RESULT(
-        7,
-        "Push Result",
-        "Confirm what reached GitHub",
-    ),
-    HISTORY(
-        8,
-        "Push History",
-        "Review earlier pushes and push again",
-    );
-
-    companion object {
-        const val TOTAL = 8
-
-        /** Enum entries via `values()` to stay warning-free on Kotlin 1.9. */
-        val ordered: List<WizardStep> = values().toList()
-    }
-}
+enum class Screen { SETUP, DASHBOARD, DASHBOARD_PUSH, SYNC, RESULT }
 
 /**
  * A hand-written state holder instead of a dataclass per screen. Boolean flags
@@ -76,8 +27,6 @@ enum class WizardStep(val number: Int, val title: String, val subtitle: String) 
  */
 data class MainUiState(
     val screen: Screen = Screen.SETUP,
-    /** Which of the eight workflow pages is showing. */
-    val step: WizardStep = WizardStep.TOKEN,
     val darkTheme: Boolean = false,
 
     // Setup / credentials
@@ -100,7 +49,8 @@ data class MainUiState(
     val repoValidationMessage: String? = null,
 
     val selectedBranch: String = "",
-    val commitMessage: String = "Initial commit via Zip2Git",
+    /** Default matches the original form's placeholder text. */
+    val commitMessage: String = "Sync project files via Zip2Git",
 
     // Source selection
     val sourceType: SourceType? = null,
@@ -125,6 +75,13 @@ data class MainUiState(
     val expandedPath: String? = null,
     /** True once "Inspect Changes & Validate" has been pressed. */
     val showReview: Boolean = false,
+
+    // Secret file guard
+    /** Paths in the current source that look like credentials (.env, *.pem ...). */
+    val secretPaths: List<String> = emptyList(),
+    /** When true the detected secret files are held back from the push. */
+    val hideSecrets: Boolean = true,
+
     val syncProgress: SyncProgress? = null,
     val syncResult: SyncResult? = null,
     val syncError: SyncErrorInfo? = null,
