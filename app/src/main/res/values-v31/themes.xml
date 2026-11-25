@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Android 12+ (API 31) shows its own launch splash from the launcher icon.
+      Match it to the app's dark splash and swap to the in-app theme afterwards.
+    -->
+    <style name="Theme.Zip2Git.Splash" parent="Theme.Zip2Git">
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:postSplashScreenTheme">@style/Theme.Zip2Git</item>
+    </style>
+</resources>

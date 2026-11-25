@@ -1164,15 +1164,9 @@ internal fun ReviewCard(
         }
 
         val changes = com.zip2git.domain.DiffEngine.toChangeList(comparison)
-        if (changes.isEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = "Everything is already up to date.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            return@SectionCard
-        }
+        // With nothing to sync the pills above already read +0 / ~0 / -0, so the
+        // list and push action are simply omitted (the original has no extra text).
+        if (changes.isEmpty()) return@SectionCard
 
         if (secretPaths.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))

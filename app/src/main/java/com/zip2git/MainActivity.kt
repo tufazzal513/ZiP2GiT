@@ -9,6 +9,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
@@ -19,7 +26,7 @@ import com.zip2git.ui.Screen
 import com.zip2git.ui.screens.DashboardScreen
 import com.zip2git.ui.screens.HomeScreen
 import com.zip2git.ui.screens.ResultScreen
-import com.zip2git.ui.screens.SetupScreen
+import com.zip2git.ui.screens.SplashScreen
 import com.zip2git.ui.screens.SyncScreen
 import com.zip2git.ui.theme.Zip2GitTheme
 
@@ -81,66 +88,76 @@ class MainActivity : ComponentActivity() {
 
             Zip2GitTheme(darkTheme = state.darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    when (state.screen) {
-                        Screen.SETUP -> SetupScreen(
-                            state = state,
-                            onRepoUrlChange = viewModel::onRepoUrlChange,
-                            onTokenChange = viewModel::onTokenChange,
-                            onConnect = viewModel::connect,
-                        )
+                    AnimatedContent(
+                        targetState = state.screen,
+                        transitionSpec = {
+                            // Fade only when the animated splash hands over to the home
+                            // page; every other screen swap stays instant to keep the
+                            // wizard snappy.
+                            if (initialState == Screen.SPLASH && targetState == Screen.DASHBOARD) {
+                                fadeIn(tween(350)) togetherWith fadeOut(tween(350))
+                            } else {
+                                EnterTransition.None togetherWith ExitTransition.None
+                            }
+                        },
+                        label = "screen",
+                    ) { screen ->
+                        when (screen) {
+                            Screen.SPLASH -> SplashScreen()
 
-                        Screen.DASHBOARD -> HomeScreen(
-                            state = state,
-                            onStartNewPush = viewModel::openPushForm,
-                            onOpenRecent = viewModel::openRecent,
-                            onToggleTheme = viewModel::toggleDarkTheme,
-                            onDismissBanner = viewModel::dismissBanner,
-                        )
+                            Screen.DASHBOARD -> HomeScreen(
+                                state = state,
+                                onStartNewPush = viewModel::openPushForm,
+                                onOpenRecent = viewModel::openRecent,
+                                onToggleTheme = viewModel::toggleDarkTheme,
+                                onDismissBanner = viewModel::dismissBanner,
+                            )
 
-                        Screen.DASHBOARD_PUSH -> DashboardScreen(
-                            state = state,
-                            onTokenChange = viewModel::onTokenChange,
-                            onTestToken = viewModel::testTokenAndLoadRepos,
-                            onSelectRepo = viewModel::selectRepoFromList,
-                            onRefreshRepos = viewModel::loadUserRepos,
-                            onRepoUrlChange = viewModel::onRepoUrlChange,
-                            onTargetFolderChange = viewModel::onTargetFolderChange,
-                            onPickZip = { pickZip.launch(ZIP_MIME_TYPES) },
-                            onPickFolder = { pickFolder.launch(null) },
-                            onPickFiles = { pickFiles.launch(arrayOf("*/*")) },
-                            onClearSource = viewModel::clearSource,
-                            onBranchChange = viewModel::onBranchChange,
-                            onRefreshBranches = viewModel::loadBranches,
-                            onCommitMessageChange = viewModel::onCommitMessageChange,
-                            onMirrorSyncChange = viewModel::setMirrorSync,
-                            onInspectChanges = viewModel::inspectChanges,
-                            onRefreshComparison = viewModel::refreshComparison,
-                            onTogglePathExcluded = viewModel::togglePathExcluded,
-                            onClearExcluded = viewModel::clearExcludedPaths,
-                            onStartSync = viewModel::startSync,
-                            onToggleTheme = viewModel::toggleDarkTheme,
-                            onDismissBanner = viewModel::dismissBanner,
-                            onDismissError = viewModel::dismissError,
-                            onToggleAdvanced = viewModel::toggleAdvanced,
-                            onKeepImportantChange = viewModel::setKeepImportantFiles,
-                            onStripRootChange = viewModel::setStripRootFolder,
-                            onAddFilterRule = viewModel::addFilterRule,
-                            onRemoveFilterRule = viewModel::removeFilterRule,
-                            onToggleFilterRule = viewModel::toggleFilterRule,
-                            onHideSecretsChange = viewModel::setHideSecrets,
-                            onBack = viewModel::goToDashboard,
-                        )
+                            Screen.DASHBOARD_PUSH -> DashboardScreen(
+                                state = state,
+                                onTokenChange = viewModel::onTokenChange,
+                                onTestToken = viewModel::testTokenAndLoadRepos,
+                                onSelectRepo = viewModel::selectRepoFromList,
+                                onRefreshRepos = viewModel::loadUserRepos,
+                                onRepoUrlChange = viewModel::onRepoUrlChange,
+                                onTargetFolderChange = viewModel::onTargetFolderChange,
+                                onPickZip = { pickZip.launch(ZIP_MIME_TYPES) },
+                                onPickFolder = { pickFolder.launch(null) },
+                                onPickFiles = { pickFiles.launch(arrayOf("*/*")) },
+                                onClearSource = viewModel::clearSource,
+                                onBranchChange = viewModel::onBranchChange,
+                                onRefreshBranches = viewModel::loadBranches,
+                                onCommitMessageChange = viewModel::onCommitMessageChange,
+                                onMirrorSyncChange = viewModel::setMirrorSync,
+                                onInspectChanges = viewModel::inspectChanges,
+                                onRefreshComparison = viewModel::refreshComparison,
+                                onTogglePathExcluded = viewModel::togglePathExcluded,
+                                onClearExcluded = viewModel::clearExcludedPaths,
+                                onStartSync = viewModel::startSync,
+                                onToggleTheme = viewModel::toggleDarkTheme,
+                                onDismissBanner = viewModel::dismissBanner,
+                                onDismissError = viewModel::dismissError,
+                                onToggleAdvanced = viewModel::toggleAdvanced,
+                                onKeepImportantChange = viewModel::setKeepImportantFiles,
+                                onStripRootChange = viewModel::setStripRootFolder,
+                                onAddFilterRule = viewModel::addFilterRule,
+                                onRemoveFilterRule = viewModel::removeFilterRule,
+                                onToggleFilterRule = viewModel::toggleFilterRule,
+                                onHideSecretsChange = viewModel::setHideSecrets,
+                                onBack = viewModel::goToDashboard,
+                            )
 
-                        Screen.SYNC -> SyncScreen(
-                            state = state,
-                            onCancel = viewModel::cancelSync,
-                        )
+                            Screen.SYNC -> SyncScreen(
+                                state = state,
+                                onCancel = viewModel::cancelSync,
+                            )
 
-                        Screen.RESULT -> ResultScreen(
-                            state = state,
-                            onSyncAnother = viewModel::startNewPush,
-                            onBackToDashboard = viewModel::goToDashboard,
-                        )
+                            Screen.RESULT -> ResultScreen(
+                                state = state,
+                                onSyncAnother = viewModel::startNewPush,
+                                onBackToDashboard = viewModel::goToDashboard,
+                            )
+                        }
                     }
                 }
             }

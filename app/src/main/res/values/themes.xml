@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- In-app Compose theme; the app drives colours from Compose, not XML. -->
     <style name="Theme.Zip2Git" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+      Launch theme: a dark window background so the cold-start window matches the
+      Compose splash instead of flashing the default light background.
+    -->
+    <style name="Theme.Zip2Git.Splash" parent="Theme.Zip2Git">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
 </resources>

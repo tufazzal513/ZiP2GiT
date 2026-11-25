@@ -13,12 +13,12 @@ import com.zip2git.data.model.SyncResult
 
 /**
  * Top-level screens, mirroring the original app's page boundaries:
- * [Screen.DASHBOARD] is the home page behind the back arrow (recent pushes),
- * [Screen.DASHBOARD_PUSH] is the `New Git Push` form itself, [Screen.SYNC] the
- * upload takeover and [Screen.RESULT] the outcome page.
- * [Screen.SETUP] is only reached on a cold start before a token exists.
+ * [Screen.SPLASH] is the launch screen, [Screen.DASHBOARD] the home page behind
+ * the back arrow (recent pushes), [Screen.DASHBOARD_PUSH] is the `New Git Push`
+ * form itself, [Screen.SYNC] the upload takeover and [Screen.RESULT] the outcome
+ * page. Credentials are entered inline on the home/form, as in the original app.
  */
-enum class Screen { SETUP, DASHBOARD, DASHBOARD_PUSH, SYNC, RESULT }
+enum class Screen { SPLASH, DASHBOARD, DASHBOARD_PUSH, SYNC, RESULT }
 
 /**
  * A hand-written state holder instead of a dataclass per screen. Boolean flags
@@ -26,7 +26,7 @@ enum class Screen { SETUP, DASHBOARD, DASHBOARD_PUSH, SYNC, RESULT }
  * etc. so the UI can show the same spinners.
  */
 data class MainUiState(
-    val screen: Screen = Screen.SETUP,
+    val screen: Screen = Screen.DASHBOARD,
     val darkTheme: Boolean = false,
 
     // Setup / credentials
@@ -73,8 +73,6 @@ data class MainUiState(
     val comparison: FileComparison? = null,
     /** Exact local paths the user unchecked in the change review. */
     val excludedPaths: Set<String> = emptySet(),
-    /** Path whose local/remote preview is expanded, or null. */
-    val expandedPath: String? = null,
     /** True once "Inspect Changes & Validate" has been pressed. */
     val showReview: Boolean = false,
 

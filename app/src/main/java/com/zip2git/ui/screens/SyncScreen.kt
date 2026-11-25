@@ -156,7 +156,7 @@ fun SyncScreen(
                 .height(48.dp),
             shape = RoundedCornerShape(14.dp),
         ) {
-            Text("Cancel push")
+            Text("Sync cancelled by user")
         }
     }
 }

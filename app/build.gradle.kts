@@ -38,6 +38,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Splash footer shows BuildConfig.VERSION_NAME so the version never
+        // drifts from the gradle file.
+        buildConfig = true
     }
 
     composeOptions {

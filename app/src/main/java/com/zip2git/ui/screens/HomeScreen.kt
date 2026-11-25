@@ -131,6 +131,17 @@ fun HomeScreen(
                 }
             }
 
+            if (!state.tokenIsSet && state.banner == null) {
+                item {
+                    com.zip2git.ui.components.MessageBanner(
+                        title = "Not connected yet",
+                        message = "Tap Start New Push to enter your GitHub Repository URL " +
+                            "& Personal Access Token (PAT).",
+                        isError = false,
+                    )
+                }
+            }
+
             item { HeroCard(onStartNewPush = onStartNewPush) }
 
             item { HowItWorksCard() }

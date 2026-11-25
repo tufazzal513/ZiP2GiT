@@ -26,6 +26,7 @@ import com.zip2git.domain.SecretScanner
 import com.zip2git.domain.SyncEngine
 import com.zip2git.domain.ZipProjectSource
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,9 +46,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _uiState = MutableStateFlow(
         MainUiState(
-            // A saved token means the user already connected, so the app opens on
-            // the home page instead of asking for credentials again.
-            screen = if (appContainer.tokenStore.hasToken()) Screen.DASHBOARD else Screen.SETUP,
+            // Every cold start opens on the animated splash; the app state read
+            // below is already available, so the splash is held only long enough
+            // to play the entry animation before crossfading to the home page.
+            screen = Screen.SPLASH,
             darkTheme = appContainer.themeStore.darkMode,
             tokenIsSet = appContainer.tokenStore.hasToken(),
             connectedLogin = appContainer.tokenStore.lastUserLogin.orEmpty(),
@@ -58,6 +60,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ),
     )
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+
+    // -- splash ---------------------------------------------------------------
+
+    init {
+        viewModelScope.launch {
+            delay(SPLASH_MIN_MILLIS)
+            _uiState.update { it.copy(screen = Screen.DASHBOARD) }
+        }
+    }
 
     private var projectSource: ProjectSource? = null
     private var syncJob: Job? = null
@@ -349,13 +360,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshComparison()
     }
 
-    /** Expands the local/remote preview row for [path], or collapses it. */
-    fun toggleExpandedPath(path: String) {
-        _uiState.update {
-            it.copy(expandedPath = if (it.expandedPath == path) null else path)
-        }
-    }
-
     /** "Inspect Changes & Validate": validates the branch, then runs the diff. */
     fun inspectChanges() {
         val state = _uiState.value
@@ -406,7 +410,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         totalZipBytes = source.entries.sumOf { it.size },
                         secretPaths = secrets,
                         excludedPaths = emptySet(),
-                        expandedPath = null,
                         showReview = false,
                     )
                 }
@@ -438,7 +441,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             totalZipBytes = source.entries.sumOf { it.size },
                             secretPaths = secrets,
                             excludedPaths = emptySet(),
-                            expandedPath = null,
                             showReview = false,
                         )
                     }
@@ -471,7 +473,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             totalZipBytes = source.entries.sumOf { it.size },
                             secretPaths = secrets,
                             excludedPaths = emptySet(),
-                            expandedPath = null,
                             showReview = false,
                         )
                     }
@@ -498,7 +499,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 secretPaths = emptyList(),
                 comparison = null,
                 excludedPaths = emptySet(),
-                expandedPath = null,
                 showReview = false,
             )
         }
@@ -702,22 +702,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadRepository(item.repoOwner, item.repoName, preferredBranch = item.branch)
     }
 
-    fun disconnect() {
-        appContainer.tokenStore.token = null
-        projectSource?.close()
-        projectSource = null
-        _uiState.update {
-            MainUiState(
-                screen = Screen.SETUP,
-                darkTheme = appContainer.themeStore.darkMode,
-                recentPushes = appContainer.historyStore.items,
-                filterRules = appContainer.filterStore.rules,
-                keepImportantFiles = appContainer.filterStore.keepImportantFiles,
-                stripRootFolder = appContainer.filterStore.stripRootFolder,
-            )
-        }
-    }
-
     val selectedEntries: List<ZipFileEntry>
         get() = projectSource?.entries ?: emptyList()
+
+    private companion object {
+        /**
+         * How long the animated splash is held before the home page fades in.
+         * The saved state is read synchronously in the constructor, so this is a
+         * deliberate minimum so the entry animation reads as intentional.
+         */
+        const val SPLASH_MIN_MILLIS = 1400L
+    }
 }
