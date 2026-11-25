@@ -1,6 +1,8 @@
 package com.zip2git.domain
 
 import com.zip2git.data.model.ZipFileEntry
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Flags files that look like credentials before they are pushed.
@@ -135,7 +137,8 @@ object SecretScanner {
     }
 
     /**
-     * Path pass plus a bounded content pass.
+     * Path pass plus a bounded content pass, run on [Dispatchers.IO] so the
+     * regex sweep never blocks the UI thread.
      *
      * @param open returns the raw bytes for one path; implementations may read
      *   from memory (ZIP) or from SAF. Failures are swallowed — an unreadable
@@ -144,7 +147,7 @@ object SecretScanner {
     suspend fun detectWithContent(
         entries: List<ZipFileEntry>,
         open: suspend (String) -> ByteArray,
-    ): List<String> {
+    ): List<String> = withContext(Dispatchers.IO) {
         val flagged = LinkedHashSet<String>()
 
         // Pass 1: cheap, runs over every entry.
@@ -161,6 +164,6 @@ object SecretScanner {
             if (looksLikeSecretContent(text)) flagged.add(entry.path)
         }
 
-        return flagged.toList().sorted()
+        flagged.toList().sorted()
     }
 }
