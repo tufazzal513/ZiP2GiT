@@ -22,6 +22,7 @@ import com.zip2git.domain.ErrorMapper
 import com.zip2git.domain.ProjectSource
 import com.zip2git.domain.RepoUrlParser
 import com.zip2git.domain.SafProjectSource
+import com.zip2git.domain.SecretScanner
 import com.zip2git.domain.SyncEngine
 import com.zip2git.domain.ZipProjectSource
 import kotlinx.coroutines.Job
@@ -44,6 +45,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _uiState = MutableStateFlow(
         MainUiState(
+            // A saved token means the user already connected, so the app opens on
+            // the home page instead of asking for credentials again.
+            screen = if (appContainer.tokenStore.hasToken()) Screen.DASHBOARD else Screen.SETUP,
             darkTheme = appContainer.themeStore.darkMode,
             tokenIsSet = appContainer.tokenStore.hasToken(),
             connectedLogin = appContainer.tokenStore.lastUserLogin.orEmpty(),
@@ -64,6 +68,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onTokenChange(value: String) = _uiState.update { it.copy(tokenInput = value) }
 
+    fun setHideSecrets(enabled: Boolean) = _uiState.update { it.copy(hideSecrets = enabled) }
+
     fun toggleDarkTheme() {
         val next = appContainer.themeStore.toggle()
         _uiState.update { it.copy(darkTheme = next) }
@@ -82,7 +88,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         // The URL is optional here: a blank field just means the repository is
-        // picked from the dropdown on the next wizard page.
+        // picked from the dropdown on the New Git Push form.
         val coords = state.repoUrlInput.trim().let {
             if (it.isEmpty()) null else RepoUrlParser.parseOrNull(it)
         }
@@ -117,8 +123,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 connectedLogin = user.login,
                 tokenInput = "",
                 tokenValidationMessage = "Connected as @${user.login}",
-                screen = Screen.DASHBOARD,
-                step = WizardStep.REPOSITORY,
+                screen = Screen.DASHBOARD_PUSH,
             )
         }
         loadUserRepos()
@@ -185,7 +190,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // -- repository picker -----------------------------------------------------
 
-    /** Backs the "Referesh repositories list" action next to the dropdown. */
+    /** Backs the "Refresh repositories list" action next to the dropdown. */
     fun loadUserRepos() {
         _uiState.update { it.copy(isFetchingRepos = true, repoValidationMessage = null) }
         viewModelScope.launch {
@@ -318,6 +323,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // -- per-file review -------------------------------------------------------
 
     /**
+     * The paths the diff engine should ignore: whatever the user unchecked plus,
+     * when [MainUiState.hideSecrets] is on, every detected secret file.
+     */
+    private fun effectiveExcludedPaths(state: MainUiState): Set<String> {
+        if (!state.hideSecrets || state.secretPaths.isEmpty()) return state.excludedPaths
+        return state.excludedPaths + state.secretPaths
+    }
+
+    /**
      * Unchecks a path in the change review: it is treated as never selected, so
      * it is neither uploaded nor counted as a deletion.
      */
@@ -381,12 +395,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ZipProjectSource.from(bytes, stripRoot = _uiState.value.stripRootFolder)
             }.onSuccess { source ->
                 projectSource = source
+                val secrets = SecretScanner.detectWithContent(source.entries) { source.open(it) }
                 _uiState.update {
                     it.copy(
                         isProcessingZip = false,
                         sourceType = SourceType.ZIP,
                         totalZipFiles = source.entries.size,
                         totalZipBytes = source.entries.sumOf { it.size },
+                        secretPaths = secrets,
                         excludedPaths = emptySet(),
                         expandedPath = null,
                         showReview = false,
@@ -408,6 +424,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             runCatching { SafProjectSource.fromTree(getApplication<Application>(), uri) }
                 .onSuccess { source ->
                     projectSource = source
+                    val secrets = SecretScanner.detectWithContent(source.entries) {
+                        source.open(it)
+                    }
                     _uiState.update {
                         it.copy(
                             isProcessingZip = false,
@@ -415,6 +434,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             sourceName = uri.lastPathSegment ?: "folder",
                             totalZipFiles = source.entries.size,
                             totalZipBytes = source.entries.sumOf { it.size },
+                            secretPaths = secrets,
                             excludedPaths = emptySet(),
                             expandedPath = null,
                             showReview = false,
@@ -437,6 +457,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             runCatching { SafProjectSource.fromDocuments(getApplication<Application>(), uris) }
                 .onSuccess { source ->
                     projectSource = source
+                    val secrets = SecretScanner.detectWithContent(source.entries) {
+                        source.open(it)
+                    }
                     _uiState.update {
                         it.copy(
                             isProcessingZip = false,
@@ -444,6 +467,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             sourceName = "${source.entries.size} file(s) selected",
                             totalZipFiles = source.entries.size,
                             totalZipBytes = source.entries.sumOf { it.size },
+                            secretPaths = secrets,
                             excludedPaths = emptySet(),
                             expandedPath = null,
                             showReview = false,
@@ -469,6 +493,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 sourceName = "",
                 totalZipFiles = 0,
                 totalZipBytes = 0,
+                secretPaths = emptyList(),
                 comparison = null,
                 excludedPaths = emptySet(),
                 expandedPath = null,
@@ -497,7 +522,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     options = CompareOptions(
                         mirrorSync = _uiState.value.mirrorSync,
                         filterRules = _uiState.value.filterRules,
-                        excludedPaths = _uiState.value.excludedPaths,
+                        excludedPaths = effectiveExcludedPaths(_uiState.value),
                         keepImportantFiles = _uiState.value.keepImportantFiles,
                     ),
                 )
@@ -531,7 +556,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         val branch = state.selectedBranch
         _uiState.update {
-            it.copy(isSyncing = true, syncError = null, syncResult = null, screen = Screen.SYNC, step = WizardStep.PROGRESS)
+            it.copy(isSyncing = true, syncError = null, syncResult = null, screen = Screen.SYNC)
         }
 
         syncJob = viewModelScope.launch {
@@ -545,7 +570,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     options = CompareOptions(
                         mirrorSync = state.mirrorSync,
                         filterRules = state.filterRules,
-                        excludedPaths = state.excludedPaths,
+                        excludedPaths = effectiveExcludedPaths(state),
                         keepImportantFiles = state.keepImportantFiles,
                     ),
                     defaultBranch = details.defaultBranch,
@@ -576,7 +601,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         syncResult = result,
                         recentPushes = appContainer.historyStore.items,
                         screen = Screen.RESULT,
-                        step = WizardStep.RESULT,
                     )
                 }
                 loadBranches()
@@ -586,7 +610,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         isSyncing = false,
                         syncError = ErrorMapper.map(error),
                         screen = Screen.RESULT,
-                        step = WizardStep.RESULT,
                     )
                 }
             }
@@ -600,8 +623,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 isSyncing = false,
                 syncProgress = null,
-                screen = Screen.DASHBOARD,
-                step = WizardStep.COMMIT,
+                screen = Screen.DASHBOARD_PUSH,
                 banner = "Sync cancelled by user",
             )
         }
@@ -609,111 +631,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // -- navigation ------------------------------------------------------------
 
-    /**
-     * Jumps to any workflow page. Progress and Result are separate full screens,
-     * so they also switch [Screen]; every other page lives on the dashboard.
-     */
-    fun goToStep(step: WizardStep) {
-        val target = when (step) {
-            WizardStep.PROGRESS -> Screen.SYNC
-            WizardStep.RESULT -> Screen.RESULT
-            else -> Screen.DASHBOARD
-        }
-        _uiState.update { it.copy(step = step, screen = target, banner = null) }
-    }
-
-    /** Moves one page forward, guarding the pages that need data first. */
-    fun nextStep() {
-        val state = _uiState.value
-        when (state.step) {
-            WizardStep.TOKEN -> {
-                if (state.connectedLogin.isBlank()) {
-                    _uiState.update {
-                        it.copy(
-                            tokenValidationMessage =
-                                "Connect your GitHub token first, then continue.",
-                        )
-                    }
-                    return
-                }
-                goToStep(WizardStep.REPOSITORY)
-            }
-
-            WizardStep.REPOSITORY -> {
-                if (state.repo == null) {
-                    _uiState.update { it.copy(banner = "Load a GitHub repository first.") }
-                    return
-                }
-                loadBranches()
-                goToStep(WizardStep.SOURCE)
-            }
-
-            WizardStep.SOURCE -> {
-                if (state.sourceName.isBlank()) {
-                    _uiState.update {
-                        it.copy(banner = "Pick a ZIP, Folder, or individual files to upload")
-                    }
-                    return
-                }
-                goToStep(WizardStep.REVIEW)
-            }
-
-            // Review → commit is allowed even with nothing to upload, because the
-            // commit page is where the user sees "everything is up to date".
-            WizardStep.REVIEW -> goToStep(WizardStep.COMMIT)
-            WizardStep.COMMIT -> startSync()
-            WizardStep.PROGRESS -> goToStep(WizardStep.RESULT)
-            WizardStep.RESULT -> goToStep(WizardStep.HISTORY)
-            WizardStep.HISTORY -> startNewPush()
-        }
-    }
-
-    /** Moves one page back; the first page stays put. */
-    fun previousStep() {
-        val state = _uiState.value
-        when (state.step) {
-            WizardStep.TOKEN -> Unit
-            WizardStep.REPOSITORY -> goToStep(WizardStep.TOKEN)
-            WizardStep.SOURCE -> goToStep(WizardStep.REPOSITORY)
-            WizardStep.REVIEW -> goToStep(WizardStep.SOURCE)
-            WizardStep.COMMIT -> goToStep(WizardStep.REVIEW)
-            // Progress has no back button: the commit may already exist.
-            WizardStep.PROGRESS -> Unit
-            WizardStep.RESULT -> goToStep(WizardStep.COMMIT)
-            WizardStep.HISTORY -> goToStep(WizardStep.RESULT)
-        }
-    }
-
+    /** Back arrow / "Back to Dashboard": leave the form and return to the home page. */
     fun goToDashboard() {
         _uiState.update {
             it.copy(
                 screen = Screen.DASHBOARD,
                 syncError = null,
                 syncResult = null,
+                banner = null,
             )
         }
     }
 
-    fun startNewPush() {
-        projectSource?.close()
-        projectSource = null
+    /** "Start New Push" on the home page: open the form with nothing pre-selected. */
+    fun openPushForm() {
+        clearSource()
         _uiState.update {
             it.copy(
-                screen = Screen.DASHBOARD,
-                step = WizardStep.SOURCE,
-                sourceType = null,
-                sourceName = "",
-                totalZipFiles = 0,
-                totalZipBytes = 0,
-                comparison = null,
-                excludedPaths = emptySet(),
-                expandedPath = null,
-                showReview = false,
+                screen = Screen.DASHBOARD_PUSH,
                 syncProgress = null,
                 syncResult = null,
                 syncError = null,
+                banner = null,
             )
         }
+    }
+
+    /** "Sync Another": same as [openPushForm] but keeps the repository loaded. */
+    fun startNewPush() {
+        clearSource()
+        _uiState.update {
+            it.copy(
+                screen = Screen.DASHBOARD_PUSH,
+                syncProgress = null,
+                syncResult = null,
+                syncError = null,
+                banner = null,
+            )
+        }
+    }
+
+    /** "Continue to Push History": the completed pushes live on the home page. */
+    fun openHistory() {
+        _uiState.update { it.copy(screen = Screen.DASHBOARD, banner = null) }
     }
 
     fun dismissBanner() = _uiState.update { it.copy(banner = null) }
@@ -728,8 +688,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val url = "https://github.com/${item.repoOwner}/${item.repoName}"
         _uiState.update {
             it.copy(
-                screen = Screen.DASHBOARD,
-                step = WizardStep.SOURCE,
+                screen = Screen.DASHBOARD_PUSH,
                 repoUrlInput = url,
                 banner = "Loaded ${item.repoOwner}/${item.repoName} — pick a source to push again.",
                 syncError = null,

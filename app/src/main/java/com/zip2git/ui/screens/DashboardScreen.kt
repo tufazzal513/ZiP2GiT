@@ -3,7 +3,6 @@ package com.zip2git.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.Icons
@@ -34,7 +32,6 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.UploadFile
@@ -67,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -78,23 +76,26 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.zip2git.data.model.ChangeStatus
 import com.zip2git.data.model.FileComparison
-import com.zip2git.data.model.RecentPushItem
 import com.zip2git.data.model.RepoSummary
 import com.zip2git.data.model.SourceType
 import com.zip2git.data.model.SyncErrorInfo
 import com.zip2git.ui.MainUiState
-import com.zip2git.ui.WizardStep
 import com.zip2git.ui.components.ChangeColors
 import com.zip2git.ui.components.CountPill
 import com.zip2git.ui.components.MessageBanner
 import com.zip2git.ui.components.SectionCard
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
+
+/** Success green used by the connected badge and checkmark (original app). */
+internal val ConnectedGreen = Color(0xFF22C55E)
+
+/** The blue banner behind the "Connected as @..." line. */
+internal val ConnectedBlue = Color(0xFF1D4ED8)
 /**
- * Host of the five in-form wizard pages (steps 1-5) and the history page
- * (step 8). The app bar, the "Step n of 8" header and the Back / Next footer are
- * shared, so each page only supplies its own body.
+ * The single scrolling "New Git Push" form, matching the original app: one card
+ * for repository + token + branch + commit message, then the project files card,
+ * the advanced options card, the "Inspect Changes & Validate" action, the change
+ * review that appears after inspecting, and finally the push action and history.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -119,24 +120,20 @@ fun DashboardScreen(
     onClearExcluded: () -> Unit,
     onToggleExpandedPath: (String) -> Unit,
     onStartSync: () -> Unit,
-    onDisconnect: () -> Unit,
     onToggleTheme: () -> Unit,
     onDismissBanner: () -> Unit,
     onDismissError: () -> Unit,
-    onOpenRecent: (RecentPushItem) -> Unit,
     onToggleAdvanced: () -> Unit,
     onKeepImportantChange: (Boolean) -> Unit,
     onStripRootChange: (Boolean) -> Unit,
     onAddFilterRule: (String) -> Unit,
     onRemoveFilterRule: (String) -> Unit,
     onToggleFilterRule: (String) -> Unit,
+    onHideSecretsChange: (Boolean) -> Unit,
     onBack: () -> Unit,
-    onNext: () -> Unit,
-    onGoToStep: (WizardStep) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showAbout by remember { mutableStateOf(false) }
-    val step = state.step
 
     Scaffold(
         modifier = modifier,
@@ -156,29 +153,16 @@ fun DashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Column {
-                            Text(
-                                text = "New Git Push",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                text = step.title,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        Text(
+                            text = "New Git Push",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
                         if (state.connectedLogin.isNotBlank()) {
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                            ) {
-                                Text(
-                                    text = "@${state.connectedLogin}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                )
-                            }
+                            ConnectedPill(login = state.connectedLogin)
                         }
                     }
                 },
@@ -196,9 +180,6 @@ fun DashboardScreen(
                     IconButton(onClick = { showAbout = !showAbout }) {
                         Icon(Icons.Filled.Info, contentDescription = "About Zip2Git")
                     }
-                    IconButton(onClick = onDisconnect) {
-                        Icon(Icons.Filled.Logout, contentDescription = "Sign out / change token")
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
@@ -215,8 +196,6 @@ fun DashboardScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item { WizardProgressHeader(step = step) }
-
             state.banner?.let { banner ->
                 item {
                     MessageBanner(
@@ -236,212 +215,134 @@ fun DashboardScreen(
                 item { AboutCard(onClose = { showAbout = false }) }
             }
 
-            when (step) {
-                WizardStep.TOKEN -> item {
-                    AuthenticationCard(
-                        state = state,
-                        onTokenChange = onTokenChange,
-                        onTestToken = onTestToken,
-                    )
-                }
-
-                WizardStep.REPOSITORY -> {
-                    item {
-                        TargetRepositoryCard(
-                            state = state,
-                            onSelectRepo = onSelectRepo,
-                            onRefreshRepos = onRefreshRepos,
-                            onRepoUrlChange = onRepoUrlChange,
-                        )
-                    }
-                    item {
-                        BranchSelectionCard(
-                            state = state,
-                            onBranchChange = onBranchChange,
-                            onRefreshBranches = onRefreshBranches,
-                        )
-                    }
-                }
-
-                WizardStep.SOURCE -> {
-                    item {
-                        ProjectFilesCard(
-                            state = state,
-                            onPickZip = onPickZip,
-                            onPickFolder = onPickFolder,
-                            onPickFiles = onPickFiles,
-                            onClearSource = onClearSource,
-                        )
-                    }
-                    item {
-                        AdvancedOptionsCard(
-                            state = state,
-                            onToggle = onToggleAdvanced,
-                            onMirrorSyncChange = onMirrorSyncChange,
-                            onKeepImportantChange = onKeepImportantChange,
-                            onStripRootChange = onStripRootChange,
-                            onAddFilterRule = onAddFilterRule,
-                            onRemoveFilterRule = onRemoveFilterRule,
-                            onToggleFilterRule = onToggleFilterRule,
-                        )
-                    }
-                }
-
-                WizardStep.REVIEW -> {
-                    item {
-                        ReviewCard(
-                            comparison = state.comparison,
-                            progress = state.syncProgress,
-                            excludedPaths = state.excludedPaths,
-                            expandedPath = state.expandedPath,
-                            onRefresh = onRefreshComparison,
-                            onToggleExcluded = onTogglePathExcluded,
-                            onClearExcluded = onClearExcluded,
-                            onToggleExpanded = onToggleExpandedPath,
-                        )
-                    }
-                    item {
-                        InspectButton(state = state, onInspectChanges = onInspectChanges)
-                    }
-                }
-
-                WizardStep.COMMIT -> {
-                    item {
-                        CommitSummaryCard(state = state)
-                    }
-                    item {
-                        CommitMessageCard(
-                            state = state,
-                            onCommitMessageChange = onCommitMessageChange,
-                        )
-                    }
-                }
-
-                WizardStep.HISTORY -> {
-                    if (state.recentPushes.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = "Recently completed work:",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        items(
-                            state.recentPushes,
-                            key = { it.repoOwner + it.repoName + it.branch + it.timestamp },
-                        ) {
-                            RecentPushRow(item = it, onClick = { onOpenRecent(it) })
-                        }
-                    } else {
-                        item {
-                            SectionCard(title = "Push History", subtitle = "No pushes yet") {
-                                Text(
-                                    text = "Successful pushes appear here so you can repeat " +
-                                        "them without re-entering the repository.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                    item {
-                        SectionCard(
-                            title = "Jump to a step",
-                            subtitle = "Everything up to Commit & Push can be edited again",
-                        ) {
-                            WizardStepList(
-                                current = state.step,
-                                onSelect = onGoToStep,
-                                highestReachable = WizardStep.COMMIT,
-                            )
-                        }
-                    }
-                }
-
-                // Progress and result have their own full screens.
-                WizardStep.PROGRESS, WizardStep.RESULT -> Unit
-            }
-
+            // 1. Target Repository
             item {
-                WizardFooterHost(
+                TargetRepositoryCard(
                     state = state,
-                    onBack = onBack,
-                    onNext = onNext,
+                    onSelectRepo = onSelectRepo,
+                    onRefreshRepos = onRefreshRepos,
+                    onRepoUrlChange = onRepoUrlChange,
                 )
             }
+
+            // 2. GitHub Authentication
+            item {
+                AuthenticationCard(
+                    state = state,
+                    onTokenChange = onTokenChange,
+                    onTestToken = onTestToken,
+                )
+            }
+
+            // 3. Branch & Commit Details
+            item {
+                BranchAndCommitCard(
+                    state = state,
+                    onBranchChange = onBranchChange,
+                    onRefreshBranches = onRefreshBranches,
+                    onCommitMessageChange = onCommitMessageChange,
+                )
+            }
+
+            // 4. Project Files
+            item {
+                ProjectFilesCard(
+                    state = state,
+                    onPickZip = onPickZip,
+                    onPickFolder = onPickFolder,
+                    onPickFiles = onPickFiles,
+                    onClearSource = onClearSource,
+                )
+            }
+
+            // 5. Advanced Options
+            item {
+                AdvancedOptionsCard(
+                    state = state,
+                    onToggle = onToggleAdvanced,
+                    onMirrorSyncChange = onMirrorSyncChange,
+                    onKeepImportantChange = onKeepImportantChange,
+                    onStripRootChange = onStripRootChange,
+                    onAddFilterRule = onAddFilterRule,
+                    onRemoveFilterRule = onRemoveFilterRule,
+                    onToggleFilterRule = onToggleFilterRule,
+                    onHideSecretsChange = onHideSecretsChange,
+                )
+            }
+
+            // Inline progress card while the comparison / push validation runs.
+            if (state.isProcessingZip || (state.syncProgress != null && state.comparison == null)) {
+                item { InlineProgressCard(state = state) }
+            }
+
+            // 6. Inspect Changes & Validate
+            item { InspectButton(state = state, onInspectChanges = onInspectChanges) }
+
+            // 7. Change review, revealed after inspecting.
+            if (state.comparison != null ||
+                (state.showReview && state.syncProgress == null && !state.isProcessingZip)
+            ) {
+                item {
+                    ReviewCard(
+                        comparison = state.comparison,
+                        progress = state.syncProgress,
+                        excludedPaths = state.excludedPaths,
+                        secretPaths = state.secretPaths,
+                        expandedPath = state.expandedPath,
+                        onRefresh = onRefreshComparison,
+                        onToggleExcluded = onTogglePathExcluded,
+                        onClearExcluded = onClearExcluded,
+                        onToggleExpanded = onToggleExpandedPath,
+                    )
+                }
+            }
+
+            // 8. Primary push action.
+            item { CommitCard(state = state, onStartSync = onStartSync) }
         }
     }
 }
 
-/**
- * Chooses the right footer for the current page. The wizard footer is omitted on
- * Progress (owned by [SyncScreen]) and Result (owned by [ResultScreen]).
- */
+/** The small card that appears while a comparison/validation stage is running. */
 @Composable
-private fun WizardFooterHost(
-    state: MainUiState,
-    onBack: () -> Unit,
-    onNext: () -> Unit,
-) {
-    val step = state.step
-    when (step) {
-        WizardStep.TOKEN -> WizardFooter(
-            step = step,
-            canContinue = state.connectedLogin.isNotBlank(),
-            onBack = onBack,
-            onNext = onNext,
-            hint = "Connect your GitHub token to continue.",
-        )
-
-        WizardStep.REPOSITORY -> WizardFooter(
-            step = step,
-            canContinue = state.repo != null && state.selectedBranch.isNotBlank(),
-            onBack = onBack,
-            onNext = onNext,
-            hint = "Choose a repository and a branch to continue.",
-        )
-
-        WizardStep.SOURCE -> WizardFooter(
-            step = step,
-            canContinue = state.sourceName.isNotBlank() && !state.isProcessingZip,
-            onBack = onBack,
-            onNext = onNext,
-            hint = "Pick a ZIP, folder, or files to continue.",
-        )
-
-        WizardStep.REVIEW -> WizardFooter(
-            step = step,
-            canContinue = state.comparison != null,
-            onBack = onBack,
-            onNext = onNext,
-            nextLabel = "Continue to Commit",
-            hint = "Run the comparison above so the diff is up to date.",
-        )
-
-        WizardStep.COMMIT -> WizardFooter(
-            step = step,
-            canContinue = state.sourceName.isNotBlank() && !state.isSyncing,
-            onBack = onBack,
-            onNext = onNext,
-            nextLabel = "Push to GitHub",
-            hint = "Pick a project source first.",
-        )
-
-        WizardStep.HISTORY -> WizardFooter(
-            step = step,
-            canContinue = true,
-            onBack = onBack,
-            onNext = onNext,
-            nextLabel = "Start a new push",
-        )
-
-        WizardStep.PROGRESS, WizardStep.RESULT -> Unit
+private fun InlineProgressCard(state: MainUiState) {
+    val message = when {
+        state.isProcessingZip && state.sourceType == SourceType.FOLDER -> "Scanning folder files..."
+        state.isProcessingZip -> "Extracting files from ZIP..."
+        else -> state.syncProgress?.message ?: "Checking GitHub repository & permissions..."
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
 
-/** Read-only recap of what the push will do, shown on the Commit page. */
+/** Read-only recap plus the primary "Push to GitHub" action. */
 @Composable
-private fun CommitSummaryCard(state: MainUiState) {
+internal fun CommitCard(
+    state: MainUiState,
+    onStartSync: () -> Unit,
+) {
+    val canSync = state.sourceName.isNotBlank() &&
+        state.repo != null &&
+        state.selectedBranch.isNotBlank() &&
+        !state.isSyncing &&
+        !state.isProcessingZip
+
     SectionCard(title = "Ready to push", subtitle = "Check the details before uploading") {
         SummaryRow("Repository", "${state.repo?.owner}/${state.repo?.name}")
         SummaryRow("Branch", state.selectedBranch)
@@ -458,13 +359,42 @@ private fun CommitSummaryCard(state: MainUiState) {
             state.comparison?.let {
                 "${it.added.size} added, ${it.modified.size} modified, " +
                     "${it.deleted.size} deleted"
-            } ?: "Not compared yet",
+            } ?: "Not compared yet — tap Inspect Changes & Validate",
         )
-        if (state.excludedPaths.isNotEmpty()) {
-            SummaryRow("Skipped", "${state.excludedPaths.size} file(s)")
+        val skipped = state.excludedPaths.size +
+            if (state.hideSecrets) state.secretPaths.size else 0
+        if (skipped > 0) {
+            SummaryRow("Skipped", "$skipped file(s)")
         }
         if (state.mirrorSync) {
             SummaryRow("Mode", "Mirror sync (exact match)")
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Button(
+            onClick = onStartSync,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            enabled = canSync,
+            shape = RoundedCornerShape(50),
+        ) {
+            Icon(Icons.Filled.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (state.isSyncing) "Uploading files..." else "Push to GitHub",
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+
+        if (!canSync) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Pick a repository, a branch, and a project source first.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -656,7 +586,7 @@ internal fun AuthenticationCard(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primary,
+                color = ConnectedBlue,
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -666,7 +596,7 @@ internal fun AuthenticationCard(
                     Icon(
                         Icons.Filled.CheckCircle,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
+                        tint = ConnectedGreen,
                         modifier = Modifier.size(17.dp),
                     )
                     Column {
@@ -678,13 +608,13 @@ internal fun AuthenticationCard(
                                 append("@${state.connectedLogin}")
                             },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = Color.White,
                         )
                         if (state.availableRepos.isNotEmpty()) {
                             Text(
                                 text = "@${state.connectedLogin} (${state.availableRepos.size} repos found)",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                                color = Color.White.copy(alpha = 0.9f),
                             )
                         }
                     }
@@ -735,24 +665,13 @@ internal fun AuthenticationCard(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun BranchSelectionCard(
+internal fun BranchAndCommitCard(
     state: MainUiState,
     onBranchChange: (String) -> Unit,
     onRefreshBranches: () -> Unit,
+    onCommitMessageChange: (String) -> Unit,
 ) {
-    SectionCard(
-        title = "Branch",
-        subtitle = "Pick an existing branch or type a new name to create one",
-        trailing = {
-            IconButton(onClick = onRefreshBranches, enabled = !state.isFetchingBranches) {
-                if (state.isFetchingBranches) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Fetch branches")
-                }
-            }
-        },
-    ) {
+    SectionCard(title = "Branch & Commit Details") {
         OutlinedTextField(
             value = state.selectedBranch,
             onValueChange = onBranchChange,
@@ -761,6 +680,15 @@ internal fun BranchSelectionCard(
             placeholder = { Text("main") },
             singleLine = true,
             enabled = !state.isSyncing,
+            trailingIcon = {
+                IconButton(onClick = onRefreshBranches, enabled = !state.isFetchingBranches) {
+                    if (state.isFetchingBranches) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Fetch branches")
+                    }
+                }
+            },
             shape = RoundedCornerShape(14.dp),
         )
 
@@ -800,18 +728,9 @@ internal fun BranchSelectionCard(
                 color = MaterialTheme.colorScheme.primary,
             )
         }
-    }
-}
 
-@Composable
-internal fun CommitMessageCard(
-    state: MainUiState,
-    onCommitMessageChange: (String) -> Unit,
-) {
-    SectionCard(
-        title = "Commit Message",
-        subtitle = "This text becomes the Git commit description",
-    ) {
+        Spacer(Modifier.height(16.dp))
+
         OutlinedTextField(
             value = state.commitMessage,
             onValueChange = onCommitMessageChange,
@@ -823,7 +742,7 @@ internal fun CommitMessageCard(
             shape = RoundedCornerShape(14.dp),
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             text = "Examples: \"Initial project upload\", \"Update frontend UI\", \"Fix login bug\"",
             style = MaterialTheme.typography.bodySmall,
@@ -840,7 +759,15 @@ private fun BranchChip(name: String, selected: Boolean, onClick: () -> Unit) {
         color = if (selected) {
             MaterialTheme.colorScheme.primary
         } else {
-            MaterialTheme.colorScheme.surfaceVariant
+            MaterialTheme.colorScheme.surface
+        },
+        border = if (selected) {
+            null
+        } else {
+            androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
         },
     ) {
         Text(
@@ -849,7 +776,7 @@ private fun BranchChip(name: String, selected: Boolean, onClick: () -> Unit) {
             color = if (selected) {
                 MaterialTheme.colorScheme.onPrimary
             } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
+                MaterialTheme.colorScheme.onSurface
             },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -867,17 +794,6 @@ internal fun ProjectFilesCard(
     onClearSource: () -> Unit,
 ) {
     SectionCard(title = "Project Files") {
-        if (state.isProcessingZip) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                Text("Scanning folder files...", style = MaterialTheme.typography.bodyMedium)
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-
         if (state.sourceName.isNotBlank()) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -1050,6 +966,7 @@ internal fun AdvancedOptionsCard(
     onAddFilterRule: (String) -> Unit,
     onRemoveFilterRule: (String) -> Unit,
     onToggleFilterRule: (String) -> Unit,
+    onHideSecretsChange: (Boolean) -> Unit,
 ) {
     SectionCard(
         title = "Advanced Options",
@@ -1095,6 +1012,17 @@ internal fun AdvancedOptionsCard(
             checked = state.keepImportantFiles,
             onCheckedChange = onKeepImportantChange,
         )
+
+        if (state.secretPaths.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            OptionSwitch(
+                title = "Exclude secret files",
+                detail = "${state.secretPaths.size} credential-looking file(s) detected " +
+                    "(.env, *.pem, *.key, ...). Kept off the push while on.",
+                checked = state.hideSecrets,
+                onCheckedChange = onHideSecretsChange,
+            )
+        }
 
         if (state.showAdvanced) {
             Spacer(Modifier.height(10.dp))
@@ -1257,6 +1185,7 @@ internal fun ReviewCard(
     comparison: FileComparison?,
     progress: com.zip2git.data.model.SyncProgress?,
     excludedPaths: Set<String>,
+    secretPaths: List<String>,
     expandedPath: String?,
     onRefresh: () -> Unit,
     onToggleExcluded: (String) -> Unit,
@@ -1310,6 +1239,46 @@ internal fun ReviewCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             return@SectionCard
+        }
+
+        if (secretPaths.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Secret files held back",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "These look like credentials and will NOT be pushed while " +
+                            "\"Exclude secret files\" is on:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    secretPaths.take(6).forEach { path ->
+                        Text(
+                            text = "•  $path",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                    if (secretPaths.size > 6) {
+                        Text(
+                            text = "…and ${secretPaths.size - 6} more",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                }
+            }
         }
 
         if (excludedPaths.isNotEmpty()) {
@@ -1435,43 +1404,6 @@ internal fun FileChangeRow(
 }
 
 @Composable
-internal fun CommitCard(
-    state: MainUiState,
-    onStartSync: () -> Unit,
-) {
-    val canSync = !state.isSyncing &&
-        state.sourceName.isNotBlank() &&
-        state.selectedBranch.isNotBlank()
-
-    SectionCard(title = "Commit & push") {
-        Spacer(Modifier.height(2.dp))
-        Button(
-            onClick = onStartSync,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            enabled = canSync,
-            shape = RoundedCornerShape(50),
-        ) {
-            Icon(Icons.Filled.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (state.isSyncing) "Uploading files..." else "Push to GitHub",
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-        if (!canSync && !state.isSyncing) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Pick a project source and a branch first.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
 internal fun AboutCard(onClose: () -> Unit) {
     SectionCard(
         title = "About Zip2Git",
@@ -1541,53 +1473,4 @@ private fun ErrorCard(error: SyncErrorInfo, onDismiss: () -> Unit) {
         isError = true,
         onDismiss = onDismiss,
     )
-}
-
-@Composable
-internal fun RecentPushRow(item: RecentPushItem, onClick: () -> Unit) {
-    val formatter = remember { SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()) }
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 1.dp,
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(11.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.CloudUpload,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(19.dp),
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "${item.repoOwner}/${item.repoName}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "${item.branch} • ${item.fileName} • ${formatter.format(Date(item.timestamp))}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
 }
