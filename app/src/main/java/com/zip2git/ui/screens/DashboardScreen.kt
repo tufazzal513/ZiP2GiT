@@ -1254,6 +1254,20 @@ private fun AboutCard(onClose: () -> Unit) {
             }
         },
     ) {
+        Text(
+            text = "Zip2Git is an on-device Android tool to upload ZIP archives and project " +
+                "directories directly to GitHub repositories.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "Your privacy and code security are our top priorities:",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(4.dp))
         listOf(
             "1. Direct Connection: All network requests communicate directly between your device and api.github.com.",
             "2. No Cloud Relay: No code, tokens, or analytics are transmitted to any third-party or intermediate server.",
@@ -1262,6 +1276,27 @@ private fun AboutCard(onClose: () -> Unit) {
         ).forEach { line ->
             Text(
                 text = line,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 3.dp),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = "How Zip2Git Works",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(4.dp))
+        listOf(
+            "Full Git-compatible SHA-1 hashing on-device",
+            "Atomic commit creation via GitHub REST API",
+            "Zero intermediate servers: direct phone-to-GitHub",
+            "Token securely stored only on-device",
+        ).forEach { line ->
+            Text(
+                text = "•  $line",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 3.dp),

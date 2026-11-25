@@ -12,6 +12,8 @@ import java.util.zip.ZipInputStream
  */
 object ArchiveLimits {
     const val MAX_FILE_COUNT = 3000
+    /** Per-file guard the original app enforces before it will touch GitHub. */
+    const val MAX_FILE_BYTES = 25L * 1024 * 1024 // 25 MB
     const val MAX_TOTAL_UNCOMPRESSED_BYTES = 120L * 1024 * 1024 // 120 MB
 }
 
@@ -62,6 +64,11 @@ class ZipProjectSource private constructor(
                                 )
                             val data = zin.readBytes()
                             totalSize += data.size
+                            if (data.size > ArchiveLimits.MAX_FILE_BYTES) {
+                                throw ArchiveTooLargeException(
+                                    "\"$name\" exceeds 25 MB limit.",
+                                )
+                            }
                             if (raw.size + 1 > ArchiveLimits.MAX_FILE_COUNT) {
                                 throw ArchiveTooLargeException(
                                     "ZIP exceeds maximum file count limit of " +

@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.zip2git.data.model.SyncProgress
@@ -305,6 +306,20 @@ fun ResultScreen(
         }
 
         Spacer(Modifier.height(26.dp))
+
+        if (success && !result?.commitUrl.isNullOrBlank()) {
+            val uriHandler = LocalUriHandler.current
+            OutlinedButton(
+                onClick = { uriHandler.openUri(result!!.commitUrl!!) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                Text("View Commit")
+            }
+            Spacer(Modifier.height(10.dp))
+        }
 
         androidx.compose.material3.Button(
             onClick = onSyncAnother,

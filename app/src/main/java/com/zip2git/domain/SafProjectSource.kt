@@ -98,6 +98,9 @@ class SafProjectSource private constructor(
                 ) ?: continue
 
                 val size = DocumentFile.fromSingleUri(context, uri)?.length() ?: 0L
+                if (size > ArchiveLimits.MAX_FILE_BYTES) {
+                    throw ArchiveTooLargeException("\"$source\" exceeds 25 MB limit.")
+                }
                 total += size
                 if (total > ArchiveLimits.MAX_TOTAL_UNCOMPRESSED_BYTES) {
                     throw ArchiveTooLargeException("Total folder size exceeds 120MB limit.")

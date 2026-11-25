@@ -98,6 +98,8 @@ class SyncEngine(private val repo: GitHubRepository) {
         isEmptyRepo: Boolean,
         onProgress: suspend (SyncProgress) -> Unit,
     ): SyncOutcome = withContext(Dispatchers.IO) {
+        onProgress(SyncProgress(step = SyncStep.VALIDATING_REPO, message = "Preparing synchronization..."))
+
         val plan = resolvePlan(owner, repoName, branch, defaultBranch, isEmptyRepo)
 
         onProgress(
@@ -106,7 +108,7 @@ class SyncEngine(private val repo: GitHubRepository) {
                 message = when (source.sourceType) {
                     com.zip2git.data.model.SourceType.ZIP -> "Extracting files from ZIP..."
                     com.zip2git.data.model.SourceType.FOLDER -> "Scanning folder files..."
-                    com.zip2git.data.model.SourceType.FILES -> "Reading selected files..."
+                    com.zip2git.data.model.SourceType.FILES -> "Processing files..."
                 },
             ),
         )
@@ -114,13 +116,20 @@ class SyncEngine(private val repo: GitHubRepository) {
         onProgress(
             SyncProgress(
                 step = SyncStep.FETCHING_TREE,
-                message = "Calculating file hashes & comparing tree...",
+                message = "Reading existing repository tree...",
             ),
         )
 
         val remoteTree = plan.baseTreeSha
             ?.let { repo.listTreeFiles(owner, repoName, it) }
             ?: emptyList()
+
+        onProgress(
+            SyncProgress(
+                step = SyncStep.FETCHING_TREE,
+                message = "Comparing ZIP contents with repository...",
+            ),
+        )
 
         val comparison = DiffEngine.compare(
             localFiles = source.entries,
