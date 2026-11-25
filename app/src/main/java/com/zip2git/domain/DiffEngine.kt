@@ -80,16 +80,16 @@ object DiffEngine {
         options: CompareOptions,
     ): FileComparison {
         val prefix = options.pathPrefix.trim().trim('/')
-        // Local paths are re-rooted under the optional target folder. Uploading
-        // through the prefixed entry keeps the blob bytes (and sha) untouched.
-        val localSource = if (prefix.isEmpty()) {
-            localFiles
-        } else {
-            localFiles.map { entry -> entry.copy(path = "$prefix/${entry.path}") }
-        }
-
-        val filtered = applyFilters(localSource, options.filterRules)
+        // Filter rules and exclusions are written against the user's own paths, so
+        // narrow the selection first and only then re-root it under the target
+        // folder. Uploading through the prefixed entry keeps the blob sha intact.
+        val selected = applyFilters(localFiles, options.filterRules)
             .filterNot { options.excludedPaths.contains(it.path) }
+        val localSource = if (prefix.isEmpty()) {
+            selected
+        } else {
+            selected.map { entry -> entry.copy(path = "$prefix/${entry.path}") }
+        }
         // With a target folder, only remote files *inside* that folder are
         // candidates; the rest of the repository must not be mirrored or deleted.
         val remoteSource = if (prefix.isEmpty()) {
@@ -98,13 +98,13 @@ object DiffEngine {
             remoteTree.filter { it.path == prefix || it.path.startsWith("$prefix/") }
         }
         val remoteByPath = remoteSource.associateBy { it.path }
-        val localPaths = HashSet<String>(filtered.size)
+        val localPaths = HashSet<String>(localSource.size)
 
         val added = ArrayList<ZipFileEntry>()
         val modified = ArrayList<ZipFileEntry>()
         val unchanged = ArrayList<ZipFileEntry>()
 
-        for (file in filtered) {
+        for (file in localSource) {
             localPaths.add(file.path)
             val remote = remoteByPath[file.path]
             when {
